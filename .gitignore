@@ -1,0 +1,7 @@
+# Common
+.venv
+.idea
+.env
+__pycache__/
+dist
+.pytest_cache
