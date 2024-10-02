@@ -2,6 +2,8 @@ from dataclass_sqlalchemy_mixins.base.mixins import SqlAlchemyFilterConverterMix
 from sqlalchemy import select
 from sqlalchemy.orm import InstrumentedAttribute
 
+from sqlalchemy_query_manager.consts import classproperty
+
 
 class QueryManager(SqlAlchemyFilterConverterMixin):
     def __init__(self, model, sessionmaker, filters=None):
@@ -58,7 +60,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin):
 
     @property
     def binary_expressions(self):
-        if self._binary_expressions is None:
+        if self._binary_expressions is None and self.filters:
             self._binary_expressions = self.get_binary_expressions(
                 filters=self.filters
             )
@@ -71,13 +73,18 @@ class QueryManager(SqlAlchemyFilterConverterMixin):
         if self.fields:
             query = select(*self.fields)
 
-        query = query.where(*self.binary_expressions)
+        if self.binary_expressions:
+            query = query.where(*self.binary_expressions)
 
         return query
 
     def all(self):
         with self.sessionmaker() as session:
-            return session.execute(self.query).all()
+            result = session.execute(self.query)
+
+            if not self.fields:
+                result = result.scalars()
+            return result.all()
 
     def first(self):
         with self.sessionmaker() as session:
@@ -118,28 +125,17 @@ class AsyncQueryManager(QueryManager):
 
         return obj
 
+    async def all(self):
+        async with self.sessionmaker() as session:
+            result = await session.execute(self.query)
 
-class classproperty(property):
-    def __get__(self, owner_self, owner_cls):
-        return self.fget(owner_cls)
+            if not self.fields:
+                result = result.scalars()
 
-
-class BaseModelQueryManager(SqlAlchemyFilterConverterMixin):
-    sessionmaker = None
-
-    @classmethod
-    def get_columns(cls, *fields):
-        db_fields = []
-
-        for field in fields:
-            db_field = getattr(cls, field)
-
-            db_fields.append(db_field)
-
-        return db_fields
+            return result.all()
 
 
-class ModelQueryManager(BaseModelQueryManager):
+class ModelQueryManager(QueryManager):
     @classproperty
     def query_manager(cls):
         return QueryManager(
