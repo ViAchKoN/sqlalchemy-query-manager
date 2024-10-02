@@ -3,7 +3,7 @@ import pytest
 from tests import models_factory
 
 
-def test_get_object(
+def test_get_object__ok(
     db_session,
     sync_db_engine,
     item_sql_query_manager,
@@ -18,7 +18,7 @@ def test_get_object(
 
 
 @pytest.mark.asyncio
-async def test_async_get_object(
+async def test_async_get_object__ok(
     db_session,
     sync_db_engine,
     async_item_sql_query_manager,
