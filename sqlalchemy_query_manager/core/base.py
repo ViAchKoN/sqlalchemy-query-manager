@@ -1,5 +1,5 @@
 from dataclass_sqlalchemy_mixins.base.mixins import SqlAlchemyFilterConverterMixin
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import InstrumentedAttribute
 
 from sqlalchemy_query_manager.consts import classproperty
@@ -105,6 +105,11 @@ class QueryManager(SqlAlchemyFilterConverterMixin):
 
         return self
 
+    def count(self):
+        with self.sessionmaker() as session:
+            count = session.execute(select(func.count()).select_from(self.query)).scalar_one()
+        return count
+
 
 class AsyncQueryManager(QueryManager):
     async def first(self):
@@ -133,6 +138,11 @@ class AsyncQueryManager(QueryManager):
                 result = result.scalars()
 
             return result.all()
+
+    async def count(self):
+        async with self.sessionmaker() as session:
+            count = (await session.execute(select(func.count()).select_from(self.query))).scalar_one()
+        return count
 
 
 class ModelQueryManager(QueryManager):
