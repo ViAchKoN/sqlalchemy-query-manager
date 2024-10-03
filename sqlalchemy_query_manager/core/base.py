@@ -14,7 +14,8 @@ class QueryManager(SqlAlchemyFilterConverterMixin):
         self.fields = None
 
         self.filters = filters
-        self._binary_expressions = None
+        self.models_to_join = []
+        self._binary_expressions = []
 
     def get_model_field(
         self,
@@ -60,10 +61,14 @@ class QueryManager(SqlAlchemyFilterConverterMixin):
 
     @property
     def binary_expressions(self):
-        if self._binary_expressions is None and self.filters:
-            self._binary_expressions = self.get_binary_expressions(
+        if not self._binary_expressions and self.filters:
+            models_binary_expressions = self.get_models_binary_expressions(
                 filters=self.filters
             )
+
+            for model_binary_expression in models_binary_expressions:
+                self.models_to_join.extend(model_binary_expression.get('models'))
+                self._binary_expressions.append(model_binary_expression.get('binary_expression'))
         return self._binary_expressions
 
     @property
@@ -74,6 +79,14 @@ class QueryManager(SqlAlchemyFilterConverterMixin):
             query = select(*self.fields)
 
         if self.binary_expressions:
+            if self.models_to_join != [
+                self.ConverterConfig.model,
+            ]:
+                query = self.join_models(
+                    query=query,
+                    models=self.models_to_join
+                )
+
             query = query.where(*self.binary_expressions)
 
         return query
