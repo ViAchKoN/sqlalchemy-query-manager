@@ -1,5 +1,5 @@
 from dataclass_sqlalchemy_mixins.base.mixins import SqlAlchemyFilterConverterMixin
-from sqlalchemy import select, func
+from sqlalchemy import select, func, inspect
 from sqlalchemy.orm import InstrumentedAttribute
 
 from sqlalchemy_query_manager.consts import classproperty
@@ -101,7 +101,25 @@ class QueryManager(SqlAlchemyFilterConverterMixin):
 
     def first(self):
         with self.sessionmaker() as session:
-            return session.execute(self.query).first()
+            result = session.execute(self.query)
+
+            if not self.fields:
+                result = result.scalars()
+            return result.first()
+
+    def last(self):
+        primary_key = inspect(self.ConverterConfig.model).primary_key[0].name
+        primary_key_row = getattr(self.ConverterConfig.model, primary_key)
+
+        with self.sessionmaker() as session:
+            query = self.query.order_by(-primary_key_row)
+
+            result = session.execute(query)
+
+            if not self.fields:
+                result = result.scalars()
+
+            return result.first()
 
     def get(self, **kwargs):
         binary_expressions = self.get_binary_expressions(
@@ -127,7 +145,27 @@ class QueryManager(SqlAlchemyFilterConverterMixin):
 class AsyncQueryManager(QueryManager):
     async def first(self):
         async with self.sessionmaker() as session:
-            return (await session.execute(self.query)).first()
+            result = await session.execute(self.query)
+
+            if not self.fields:
+                result = result.scalars()
+
+            return result.first()
+
+    async def last(self):
+        primary_key = inspect(self.ConverterConfig.model).primary_key[0].name
+        primary_key_row = getattr(self.ConverterConfig.model, primary_key)
+
+        async with self.sessionmaker() as session:
+            query = self.query.order_by(-primary_key_row)
+
+            result = await session.execute(query)
+
+            if not self.fields:
+                result = result.scalars()
+
+            return result.first()
+
 
     async def get(self, **kwargs):
         binary_expressions = self.get_binary_expressions(
