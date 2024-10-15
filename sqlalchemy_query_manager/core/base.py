@@ -1,11 +1,11 @@
-from dataclass_sqlalchemy_mixins.base.mixins import SqlAlchemyFilterConverterMixin
+from dataclass_sqlalchemy_mixins.base.mixins import SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 from sqlalchemy import select, func, inspect
 from sqlalchemy.orm import InstrumentedAttribute
 
 from sqlalchemy_query_manager.consts import classproperty
 
 
-class QueryManager(SqlAlchemyFilterConverterMixin):
+class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin):
     def __init__(self, model, sessionmaker, filters=None):
         self.ConverterConfig.model = model
 
@@ -14,8 +14,12 @@ class QueryManager(SqlAlchemyFilterConverterMixin):
         self.fields = None
 
         self.filters = filters
+        self._order_by = None
+
         self.models_to_join = []
+
         self._binary_expressions = []
+        self._unary_expressions = []
 
     def get_model_field(
         self,
@@ -72,6 +76,19 @@ class QueryManager(SqlAlchemyFilterConverterMixin):
         return self._binary_expressions
 
     @property
+    def unary_expressions(self):
+        if not self._unary_expressions and self._order_by:
+            models_unary_expressions = self.get_models_unary_expressions(
+                order_by=self._order_by
+            )
+
+            for model_unary_expression in models_unary_expressions:
+                self.models_to_join.extend(model_unary_expression.get('models'))
+                self._binary_expressions.append(model_unary_expression.get('unary_expression'))
+
+        return self._binary_expressions
+
+    @property
     def query(self):
         query = select(self.ConverterConfig.model)
 
@@ -86,8 +103,17 @@ class QueryManager(SqlAlchemyFilterConverterMixin):
                     query=query,
                     models=self.models_to_join
                 )
-
             query = query.where(*self.binary_expressions)
+
+        if self.unary_expressions:
+            if self.models_to_join != [
+                self.ConverterConfig.model,
+            ]:
+                query = self.join_models(
+                    query=query,
+                    models=self.models_to_join
+                )
+            query = query.order_by(*self.unary_expressions)
 
         return query
 
@@ -136,6 +162,11 @@ class QueryManager(SqlAlchemyFilterConverterMixin):
 
         return self
 
+    def order_by(self, *args):
+        self._order_by = args
+
+        return self
+
     def count(self):
         with self.sessionmaker() as session:
             count = session.execute(select(func.count()).select_from(self.query)).scalar_one()
@@ -165,7 +196,6 @@ class AsyncQueryManager(QueryManager):
                 result = result.scalars()
 
             return result.first()
-
 
     async def get(self, **kwargs):
         binary_expressions = self.get_binary_expressions(
