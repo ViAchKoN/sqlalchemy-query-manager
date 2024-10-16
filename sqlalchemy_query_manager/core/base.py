@@ -6,14 +6,14 @@ from sqlalchemy_query_manager.consts import classproperty
 
 
 class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin):
-    def __init__(self, model, sessionmaker, filters=None):
+    def __init__(self, model, sessionmaker):
         self.ConverterConfig.model = model
 
         self.sessionmaker = sessionmaker
 
         self.fields = None
 
-        self.filters = filters
+        self.filters = {}
         self._order_by = None
 
         self.models_to_join = []
@@ -158,7 +158,10 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         return obj
 
     def where(self, **kwargs):
-        self.filters = kwargs
+        self.filters = {
+            **self.filters,
+            **kwargs,
+        }
 
         return self
 
