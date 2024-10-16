@@ -23,6 +23,36 @@ def test_all__filter__eq__ok(
     assert result.as_dict() == expected_item.as_dict()
 
 
+def test_all__filter__multiple_filters__ok(
+    db_session,
+    item_sql_query_manager,
+):
+    expected_item_name = "expected_item_name"
+    expected_item_number = 1
+
+    expected_item = models_factory.ItemFactory.create(
+        name=expected_item_name,
+        number=expected_item_number,
+    )
+
+    # Create unexpected items
+    models_factory.ItemFactory.create_batch(number=999, size=4)
+
+    query = item_sql_query_manager.query_manager
+
+    query = query.where(name=expected_item_name)
+    query = query.where(number=1)
+    query = query.where(number__not_in=[999, ])
+
+    results = query.all()
+
+    assert len(results) == 1
+
+    result = results[0]
+
+    assert result.as_dict() == expected_item.as_dict()
+
+
 def test_all__filter__in_not_in__ok(
     db_session,
     item_sql_query_manager,
