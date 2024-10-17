@@ -3,7 +3,7 @@ import datetime as dt
 from tests import models_factory
 
 
-def test_order_by_id__ok(
+def test_order_by__id__ok(
     db_session,
     item_sql_query_manager
 ):
@@ -25,7 +25,7 @@ def test_order_by_id__ok(
             assert result.as_dict() == expected_item.as_dict()
 
 
-def test_order_by_dates__ok(
+def test_order_by__dates__ok(
     db_session,
     item_sql_query_manager,
 ):
@@ -75,7 +75,7 @@ def test_order_by_dates__ok(
             assert result.as_dict() == expected_item.as_dict()
 
 
-def test_order_by_name__ok(
+def test_order_by__name__ok(
     db_session,
     item_sql_query_manager,
 ):

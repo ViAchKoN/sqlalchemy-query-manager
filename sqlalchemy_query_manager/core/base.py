@@ -14,7 +14,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         self.fields = None
 
         self.filters = {}
-        self._order_by = None
+        self._order_by = set()
 
         self.models_to_join = []
 
@@ -166,7 +166,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         return self
 
     def order_by(self, *args):
-        self._order_by = args
+        self._order_by.update(set(args))
 
         return self
 
