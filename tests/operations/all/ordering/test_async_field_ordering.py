@@ -6,7 +6,7 @@ from tests import models_factory
 
 
 @pytest.mark.asyncio
-async def test_async_all__order_by_id__ok(
+async def test_async_all__order_by__id__ok(
     db_session,
     async_item_sql_query_manager
 ):
@@ -29,7 +29,7 @@ async def test_async_all__order_by_id__ok(
 
 
 @pytest.mark.asyncio
-async def test_async_all__order_by_dates__ok(
+async def test_async_all__order_by__dates__ok(
     db_session,
     async_item_sql_query_manager,
 ):
@@ -80,7 +80,7 @@ async def test_async_all__order_by_dates__ok(
 
 
 @pytest.mark.asyncio
-async def test_async_all__order_by_name__ok(
+async def test_async_all__order_by__name__ok(
     db_session,
     async_item_sql_query_manager,
 ):
