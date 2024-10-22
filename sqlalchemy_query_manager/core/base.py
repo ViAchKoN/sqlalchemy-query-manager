@@ -18,6 +18,9 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         self.models_to_join = []
 
+        self._limit = None
+        self._offset = None
+
         self._binary_expressions = []
         self._unary_expressions = []
 
@@ -61,6 +64,14 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             _fields.append(field)
 
         self.fields = _fields
+        return self
+
+    def limit(self, limit):
+        self._limit = limit
+        return self
+
+    def offset(self, offset):
+        self._offset = offset
         return self
 
     @property
@@ -114,6 +125,12 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
                     models=self.models_to_join
                 )
             query = query.order_by(*self.unary_expressions)
+
+        if self._offset:
+            query = query.offset(self._offset)
+
+        if self._limit:
+            query = query.limit(self._limit)
 
         return query
 
