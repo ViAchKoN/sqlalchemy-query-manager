@@ -81,13 +81,13 @@ files = [
 
 [[package]]
 name = "dataclass-sqlalchemy-mixins"
-version = "0.2.0"
+version = "0.3.1"
 description = "Allows to convert dataclasses to sqlalchemy filters and orderings."
 optional = false
 python-versions = "<4.0.0,>=3.8.1"
 files = [
-    {file = "dataclass_sqlalchemy_mixins-0.2.0-py3-none-any.whl", hash = "sha256:4894609b9bacf77e4c1b3dc56d5e2138906c1b8a04f1cbc5b5134a375ba2ca1f"},
-    {file = "dataclass_sqlalchemy_mixins-0.2.0.tar.gz", hash = "sha256:31881a32b957a6ff8983f3cba64cadf9ddcd0d5cba631307e0e2f709f74d9a0e"},
+    {file = "dataclass_sqlalchemy_mixins-0.3.1-py3-none-any.whl", hash = "sha256:b575dae62da54bbaa4bc23b1e66f2ed04fb7261e946f80490bdd94bfd331f01f"},
+    {file = "dataclass_sqlalchemy_mixins-0.3.1.tar.gz", hash = "sha256:9406e8f067c77379ce6b51f2464af5642062d6570c26baa96743887be8b62939"},
 ]
 
 [package.dependencies]
@@ -515,4 +515,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.1"
-content-hash = "708ec767efdeb3f3fdd9d77f5be99d04df6bbb09ac10c380507bebc91ec45d78"
+content-hash = "d78812369212207d32cc7f0a167149185bb14f016cde9c4248d05fa9d6347a3b"
