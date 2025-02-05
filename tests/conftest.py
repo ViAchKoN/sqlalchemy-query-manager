@@ -101,3 +101,8 @@ def db_test_session():
             raise
         finally:
             session.close()
+
+
+pytest_plugins = [
+    "tests.fixtures.query_manager",
+]
