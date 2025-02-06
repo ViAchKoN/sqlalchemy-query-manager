@@ -1,6 +1,9 @@
+import typing
+
 from dataclass_sqlalchemy_mixins.base.mixins import SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 from sqlalchemy import select, func, inspect
-from sqlalchemy.orm import InstrumentedAttribute
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute, Session
 
 from sqlalchemy_query_manager.consts import classproperty
 from sqlalchemy_query_manager.core.transaction_context_manager import AsyncTransactionSessionContextManager, \
@@ -8,10 +11,11 @@ from sqlalchemy_query_manager.core.transaction_context_manager import AsyncTrans
 
 
 class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin):
-    def __init__(self, model, sessionmaker):
+    def __init__(self, model, sessionmaker=None, session=None):
         self.ConverterConfig.model = model
 
-        self.sessionmaker = sessionmaker
+        self.sessionmaker: "sessionmaker" = sessionmaker
+        self.session: typing.Union[Session, AsyncSession] = session
 
         self.fields = None
 
@@ -182,7 +186,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         with TransactionSessionContextManager(
             sessionmaker=self.sessionmaker,
-            session=session,
+            session=session or self.session,
         ) as session:
             obj = session.query(self.ConverterConfig.model).filter(*binary_expressions).first()
 
@@ -208,6 +212,10 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         ) as session:
             count = session.execute(select(func.count()).select_from(self.query)).scalar_one()
         return count
+
+    def with_session(self, session):
+        self.session = session
+        return self
 
 
 class AsyncQueryManager(QueryManager):
@@ -247,7 +255,7 @@ class AsyncQueryManager(QueryManager):
 
         async with AsyncTransactionSessionContextManager(
             sessionmaker=self.sessionmaker,
-            session=session
+            session=session or self.session,
         ) as session:
             obj = (
                 await session.execute(
@@ -278,19 +286,27 @@ class AsyncQueryManager(QueryManager):
         return count
 
 
-class ModelQueryManager(QueryManager):
+class BaseModelQueryManager():
+    class QueryManagerConfig:
+        sessionmaker = None
+        session = None
+
+
+class ModelQueryManager(BaseModelQueryManager):
     @classproperty
     def query_manager(cls):
         return QueryManager(
             model=cls,
-            sessionmaker=cls.sessionmaker,
+            sessionmaker=getattr(cls.QueryManagerConfig, "sessionmaker", None),
+            session=getattr(cls.QueryManagerConfig, "session", None),
         )
 
 
-class AsyncModelQueryManager(ModelQueryManager):
+class AsyncModelQueryManager(BaseModelQueryManager):
     @classproperty
     def query_manager(cls):
         return AsyncQueryManager(
             model=cls,
-            sessionmaker=cls.sessionmaker,
+            sessionmaker=getattr(cls.QueryManagerConfig, "sessionmaker", None),
+            session=getattr(cls.QueryManagerConfig, "session", None),
         )
