@@ -9,8 +9,7 @@ ___
 pip install sqlalchemy-query-manager
 ```
 ___
-
-# Introduction
+### Introduction
 
 Recently, I published my package [dataclass-sqlalchemy-mixins](https://github.com/ViAchKoN/dataclass-sqlalchemy-mixins), which allows converting dataclasses into SQLAlchemy filters directly, without extra work. Based on that experience, I decided to expand on it and build a new package that operates at the database level, where additional simplicity can be beneficial.
 
@@ -21,7 +20,7 @@ But it still possible to manually manage session if it is required.
 
 ___
 
-## Why This Package?
+### Why This Package?
 
 Typically, retrieving an object from the database in SQLAlchemy requires a lot of boilerplate code:
 
