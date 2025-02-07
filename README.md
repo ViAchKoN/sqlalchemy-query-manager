@@ -1,7 +1,4 @@
-# sqlalchemy-query-manager
-
-
-# Sql alchemy query manager
+# SQLAlchemy query manager
 _____
 ### Package requirements
 - `python >= 3.8.1`
@@ -50,7 +47,6 @@ In contrast, **Django allows writing it more concisely like**:
 ```python
 ObjectModel.objects.filter(id=1)
 ```
-
 
 ___ 
 ### Key Advantage
