@@ -154,7 +154,7 @@ db_object = ObjectModel.query_manager.first()
 db_object = ObjectModel.query_manager.last()
 ```
 
-**Select specific fields
+**Select specific fields**
 
 You can choose to return specific fields from your model using the `only` method. 
 This will return the fields you requested, and the results will be instances of the `Row` class.
