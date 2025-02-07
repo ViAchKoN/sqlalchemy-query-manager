@@ -1,4 +1,5 @@
 # SQLAlchemy query manager
+___
 ### Package requirements
 - `python >= 3.8.1`
 - `sqlalchemy >= 1.4.0`
