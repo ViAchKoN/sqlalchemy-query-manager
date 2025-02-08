@@ -1,12 +1,12 @@
 import pytest
 
-from sqlalchemy_query_manager.core.base import AsyncModelQueryManager, ModelQueryManager
+from sqlalchemy_query_manager.core.base import AsyncModelQueryManagerMixin, ModelQueryManagerMixin
 from tests.models import Item
 
 
 @pytest.fixture
 def item_sql_query_manager(sync_db_sessionmaker):
-    class InjectedItem(Item, ModelQueryManager):
+    class InjectedItem(Item, ModelQueryManagerMixin):
         class QueryManagerConfig:
             sessionmaker = sync_db_sessionmaker
 
@@ -15,7 +15,7 @@ def item_sql_query_manager(sync_db_sessionmaker):
 
 @pytest.fixture
 def async_item_sql_query_manager(async_db_sessionmaker):
-    class InjectedItem(Item, AsyncModelQueryManager):
+    class InjectedItem(Item, AsyncModelQueryManagerMixin):
         class QueryManagerConfig:
             sessionmaker = async_db_sessionmaker
 

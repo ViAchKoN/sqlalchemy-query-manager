@@ -78,61 +78,74 @@ ___
 ### Usage
 
 To use the package, you first need to set a **session** or **sessionmaker** in either  
-`ModelQueryManager` (for synchronous queries) or `AsyncModelQueryManager` (for async queries).
+`ModelQueryManagerMixin` (for synchronous queries) or `AsyncModelQueryManagerMixin` (for async queries).
 
-#### Setting up `ModelQueryManager`
+### ❗️Important
+
+If a session is not provided, all objects will be **expunged** from the session.  
+This means that accessing **relationship fields** on these objects **may cause issues** because they are no longer attached to an active session.  
+
+To avoid this, make provide a session when defining `QueryManagerConfig`
+
+#### Setting up `ModelQueryManagerMixin`
 
 ```python
-from sqlalchemy_query_manager.core.base import ModelQueryManager
+from sqlalchemy_query_manager.core.base import ModelQueryManagerMixin
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy import create_engine
 
+
 class BaseModel(DeclarativeBase):
     ...
+
 
 engine = create_engine(DB_URL)
 Session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-class ObjectModel(BaseModel, ModelQueryManager):
+
+class ObjectModel(BaseModel, ModelQueryManagerMixin):
     class QueryManagerConfig:
         sessionmaker = Session 
 ```
 
-For **`async`** support, import `AsyncModelQueryManager`.
+For **`async`** support, import `AsyncModelQueryManagerMixin`.
 
 ```python
-The rest of the setup remains the same.
-
-from sqlalchemy_query_manager.core.base import AsyncModelQueryManager
+from sqlalchemy_query_manager.core.base import AsyncModelQueryManagerMixin
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
+
 
 class BaseModel(DeclarativeBase):
     ...
 
+
 engine = create_async_engine(DB_URL)
 Session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-class ObjectModel(BaseModel, AsyncModelQueryManager):
+
+class ObjectModel(BaseModel, AsyncModelQueryManagerMixin):
     class QueryManagerConfig:
         sessionmaker = Session 
 ```
 
 **Flask Integration**
 
-If you're using `Flask`, you can directly assign the session from Flask’s SQLAlchemy extension:
+If you're using `Flask`, you can directly assign the session from Flask’s `SQLAlchemy` extension:
 
 ```python
-from sqlalchemy_query_manager.core.base import ModelQueryManager
+from sqlalchemy_query_manager.core.base import ModelQueryManagerMixin
 from sqlalchemy.orm import DeclarativeBase
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 
+
 class BaseModel(DeclarativeBase):
     ...
 
-class ObjectModel(BaseModel, ModelQueryManager):
+
+class ObjectModel(BaseModel, ModelQueryManagerMixin):
     class QueryManagerConfig:
         session = db.session
 ```
@@ -244,6 +257,26 @@ db_objects = ChildModel.query_manager.where(parent__id__gt=10).all()
 ```
 
 In this case, the package automatically performs the necessary join operation between `ChildModel` and `ParentModel` based on the foreign key parent_id.
+
+### Setting a Session for Queries  
+
+You can provide a session directly to methods such as `.all()`, `.get()`, etc., using the `session` parameter.  
+This ensures that the operation runs within the specified session:  
+
+```python
+db_objects = ObjectModel.query_manager.all(session=your_session)
+db_object = ObjectModel.query_manager.get(id=1, session=your_session)
+```
+
+Alternatively, you can set a session for the entire `QueryManager` instance using the `.with_session()` method.
+This will ensure that all subsequent operations use the provided session:
+
+```python
+query_manager = ObjectModel.query_manager.with_session(your_session)
+
+db_objects = query_manager.all()  # Uses the session set earlier
+db_object = query_manager.get(id=1)  # Also uses the session
+```
 
 ____
 ### Links

@@ -1,8 +1,6 @@
 import pytest
-from sqlalchemy.engine import Row
 
 from tests import models_factory
-from tests.models import Item
 
 
 def test_where_object_last__ok(

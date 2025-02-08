@@ -3,7 +3,7 @@ import typing
 from dataclass_sqlalchemy_mixins.base.mixins import SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 from sqlalchemy import select, func, inspect
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import InstrumentedAttribute, Session
+from sqlalchemy.orm import InstrumentedAttribute, Session, DeclarativeMeta, joinedload
 
 from sqlalchemy_query_manager.consts import classproperty
 from sqlalchemy_query_manager.core.transaction_context_manager import AsyncTransactionSessionContextManager, \
@@ -29,6 +29,35 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         self._binary_expressions = []
         self._unary_expressions = []
+
+    def join_models(
+        self,
+        query,
+        models: typing.List[DeclarativeMeta],
+    ):
+        query = query
+
+        joined_models = []
+        join_methods = [
+            "_join_entities",  # sqlalchemy <= 1.3
+            "_legacy_setup_joins",  # sqlalchemy == 1.4
+            "_setup_joins",  # sqlalchemy == 2.0
+        ]
+        for join_method in join_methods:
+            if hasattr(query, join_method):
+                joined_models = [
+                    join[0].entity_namespace for join in getattr(query, join_method)
+                ]
+                # Different sqlalchemy versions might have several join methods
+                # but only one of them will return correct joined models list
+                if joined_models:
+                    break
+
+        for model in models:
+            if model != self.ConverterConfig.model and model not in joined_models:
+                query = query.join(model)
+
+        return query
 
     def get_model_field(
         self,
@@ -118,7 +147,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             ]:
                 query = self.join_models(
                     query=query,
-                    models=self.models_to_join
+                    models=self.models_to_join,
                 )
             query = query.where(*self.binary_expressions)
 
@@ -149,7 +178,13 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
             if not self.fields:
                 result = result.scalars()
-            return result.all()
+
+            result = result.all()
+
+            if not session or not self.session:
+                session.expunge_all()
+
+            return result
 
     def first(self, session=None):
         with TransactionSessionContextManager(
@@ -160,7 +195,15 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
             if not self.fields:
                 result = result.scalars()
-            return result.first()
+
+            result = result.first()
+
+            if self.fields:
+                pass
+            elif result and (not session or not self.session):
+                session.expunge(result)
+
+            return result
 
     def last(self, session=None):
         primary_key = inspect(self.ConverterConfig.model).primary_key[0].name
@@ -177,7 +220,14 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             if not self.fields:
                 result = result.scalars()
 
-            return result.first()
+            result = result.first()
+
+            if self.fields:
+                pass
+            elif result and (not session or not self.session):
+                session.expunge(result)
+
+            return result
 
     def get(self, session=None, **kwargs):
         binary_expressions = self.get_binary_expressions(
@@ -188,9 +238,14 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             sessionmaker=self.sessionmaker,
             session=session or self.session,
         ) as session:
-            obj = session.query(self.ConverterConfig.model).filter(*binary_expressions).first()
+            result = session.query(self.ConverterConfig.model).filter(*binary_expressions).first()
 
-        return obj
+            if self.fields:
+                pass
+            elif result and (not session or not self.session):
+                session.expunge(result)
+
+        return result
 
     def where(self, **kwargs):
         self.filters = {
@@ -228,7 +283,6 @@ class AsyncQueryManager(QueryManager):
 
             if not self.fields:
                 result = result.scalars()
-
             return result.first()
 
     async def last(self, session=None):
@@ -245,7 +299,6 @@ class AsyncQueryManager(QueryManager):
 
             if not self.fields:
                 result = result.scalars()
-
             return result.first()
 
     async def get(self, session=None, **kwargs):
@@ -257,13 +310,12 @@ class AsyncQueryManager(QueryManager):
             sessionmaker=self.sessionmaker,
             session=session or self.session,
         ) as session:
-            obj = (
+            result = (
                 await session.execute(
                     select(self.ConverterConfig.model).where(*binary_expressions)
                 )
             ).scalars().first()
-
-        return obj
+        return result
 
     async def all(self, session=None):
         async with AsyncTransactionSessionContextManager(
@@ -286,13 +338,13 @@ class AsyncQueryManager(QueryManager):
         return count
 
 
-class BaseModelQueryManager():
+class BaseModelQueryManagerMixin:
     class QueryManagerConfig:
         sessionmaker = None
         session = None
 
 
-class ModelQueryManager(BaseModelQueryManager):
+class ModelQueryManagerMixin(BaseModelQueryManagerMixin):
     @classproperty
     def query_manager(cls):
         return QueryManager(
@@ -302,7 +354,7 @@ class ModelQueryManager(BaseModelQueryManager):
         )
 
 
-class AsyncModelQueryManager(BaseModelQueryManager):
+class AsyncModelQueryManagerMixin(BaseModelQueryManagerMixin):
     @classproperty
     def query_manager(cls):
         return AsyncQueryManager(
