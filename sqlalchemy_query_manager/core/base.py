@@ -272,6 +272,23 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         self.session = session
         return self
 
+    def create(self, session=None, **kwargs):
+        with TransactionSessionContextManager(
+            sessionmaker=self.sessionmaker,
+            session=session,
+        ) as session:
+            new_obj = self.ConverterConfig.model(**kwargs)
+            session.add(new_obj)
+            if self.sessionmaker:
+                session.commit()
+            else:
+                session.flush()
+            session.refresh(new_obj)
+
+            if not session or not self.session:
+                session.expunge(new_obj)
+        return new_obj
+
 
 class AsyncQueryManager(QueryManager):
     async def first(self, session=None):
@@ -336,6 +353,20 @@ class AsyncQueryManager(QueryManager):
         ) as session:
             count = (await session.execute(select(func.count()).select_from(self.query))).scalar_one()
         return count
+
+    async def create(self, session=None, **kwargs):
+        async with AsyncTransactionSessionContextManager(
+            sessionmaker=self.sessionmaker,
+            session=session,
+        ) as session:
+            new_obj = self.ConverterConfig.model(**kwargs)
+            session.add(new_obj)
+            if self.sessionmaker:
+                await session.commit()
+            else:
+                await session.flush()
+            await session.refresh(new_obj)
+        return new_obj
 
 
 class BaseModelQueryManagerMixin:

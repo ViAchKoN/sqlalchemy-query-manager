@@ -157,6 +157,24 @@ This ensures that `QueryManager` works seamlessly within `Flask` applications.
 The package provides a set of common query operations. 
 These operations can be chained and combined to perform complex queries.
 
+
+**Create**
+
+The `create` method of `QueryManager` allows creating a new object in the database.  
+
+- If a **session is provided**, 
+the object will be added to that session but **won't be committed automatically** (you must commit manually).  
+- If **no session is provided**, the operation will be **automatically committed** at the end.  
+
+```python
+# Create a new object with automatic commit
+db_object = ObjectModel.query_manager.create(field1="value1", field2="value2")
+
+# Create a new object within an existing session (manual commit required)
+db_object = ObjectModel.query_manager.create(field1="value1", field2="value2", session=your_session)
+your_session.commit()  # Commit manually if session is provided
+```
+
 **Get First Value**
 
 ```python
