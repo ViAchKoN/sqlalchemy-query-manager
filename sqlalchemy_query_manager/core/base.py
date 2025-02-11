@@ -343,6 +343,9 @@ class BaseModelQueryManagerMixin:
         sessionmaker = None
         session = None
 
+    def as_dict(self) -> typing.Dict[str, str]:
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns}  # type: ignore
+
 
 class ModelQueryManagerMixin(BaseModelQueryManagerMixin):
     @classproperty
@@ -352,7 +355,6 @@ class ModelQueryManagerMixin(BaseModelQueryManagerMixin):
             sessionmaker=getattr(cls.QueryManagerConfig, "sessionmaker", None),
             session=getattr(cls.QueryManagerConfig, "session", None),
         )
-
 
 class AsyncModelQueryManagerMixin(BaseModelQueryManagerMixin):
     @classproperty
