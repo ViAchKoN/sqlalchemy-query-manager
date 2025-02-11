@@ -10,7 +10,10 @@ def test_transaction(
 ):
     with sync_db_sessionmaker() as transaction_session:
         # Checking that there are no objects in database in transaction
-        assert item_sql_query_manager.query_manager.first(session=transaction_session) is None
+        assert (
+            item_sql_query_manager.query_manager.first(session=transaction_session)
+            is None
+        )
 
         # Creating object in database
         item = models_factory.ItemFactory.build()
@@ -38,7 +41,12 @@ async def test_async_transaction(
 ):
     async with async_db_sessionmaker() as transaction_session:
         # Checking that there are no objects in database in transaction
-        assert await async_item_sql_query_manager.query_manager.first(session=transaction_session) is None
+        assert (
+            await async_item_sql_query_manager.query_manager.first(
+                session=transaction_session
+            )
+            is None
+        )
 
         # Creating object in database
         item = models_factory.ItemFactory.build()
@@ -50,7 +58,9 @@ async def test_async_transaction(
         assert await async_item_sql_query_manager.query_manager.first() is None
 
         # Checking that object is accessible withing transaction
-        assert await async_item_sql_query_manager.query_manager.first(session=transaction_session)
+        assert await async_item_sql_query_manager.query_manager.first(
+            session=transaction_session
+        )
 
         await transaction_session.commit()
 

@@ -1,8 +1,4 @@
 import datetime as dt
-import typing as tp
-
-import pytest
-from sqlalchemy import select
 
 from tests import models, models_factory
 
@@ -32,7 +28,9 @@ def test_all_filter__eq__ok(
 
     assert db_session.query(models.Item).count() == 5
 
-    results = item_sql_query_manager.query_manager.where(group__owner__first_name=expected_owner_first_name).all()
+    results = item_sql_query_manager.query_manager.where(
+        group__owner__first_name=expected_owner_first_name
+    ).all()
 
     assert len(results) == 1
 
@@ -105,7 +103,9 @@ def test_all_filter__in_not_in__ok(
             ],
         ),
     ):
-        results = item_sql_query_manager.query_manager.where(**{field: filter_values}).all()
+        results = item_sql_query_manager.query_manager.where(
+            **{field: filter_values}
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -175,7 +175,9 @@ def test_all_filter__in_not_in__dates__ok(
             ],
         ),
     ):
-        results = item_sql_query_manager.query_manager.where(**{field: filter_values}).all()
+        results = item_sql_query_manager.query_manager.where(
+            **{field: filter_values}
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -239,7 +241,9 @@ def test_all_filter__gt_lt_gte_lte__date__ok(
             ],
         ),
     ):
-        results = item_sql_query_manager.query_manager.where(**{field: filter_values}).all()
+        results = item_sql_query_manager.query_manager.where(
+            **{field: filter_values}
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -300,7 +304,9 @@ def test_all_filter__not__ok(
             ],
         ),
     ):
-        results = item_sql_query_manager.query_manager.where(**{field: filter_values}).all()
+        results = item_sql_query_manager.query_manager.where(
+            **{field: filter_values}
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -346,7 +352,9 @@ def test_all_filter__is_null_is_not_null__ok(
             ],
         ),
     ):
-        results = item_sql_query_manager.query_manager.where(**{field: filter_values}).all()
+        results = item_sql_query_manager.query_manager.where(
+            **{field: filter_values}
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -404,7 +412,9 @@ def test_all_filter__like_ilike__ok(
             ],
         ),
     ):
-        results = item_sql_query_manager.query_manager.where(**{field: filter_value}).all()
+        results = item_sql_query_manager.query_manager.where(
+            **{field: filter_value}
+        ).all()
 
         assert len(results) == len(expected_items)
 

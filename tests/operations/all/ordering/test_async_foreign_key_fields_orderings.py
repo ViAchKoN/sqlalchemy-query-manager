@@ -1,7 +1,6 @@
 import pytest
-from sqlalchemy import select
 
-from tests import models, models_factory
+from tests import models_factory
 
 
 @pytest.mark.asyncio
@@ -27,7 +26,9 @@ async def test_all__all__order_by__id__ok(
         ]:
             expected_items = list(reversed(items))
 
-        results = await async_item_sql_query_manager.query_manager.order_by(order_by).all()
+        results = await async_item_sql_query_manager.query_manager.order_by(
+            order_by
+        ).all()
 
         for expected_item, result in zip(expected_items, results):
             assert result.as_dict() == expected_item.as_dict()
@@ -56,7 +57,9 @@ async def test_all__order_by__dates__ok(
         ]:
             expected_items = list(reversed(items))
 
-        results = await async_item_sql_query_manager.query_manager.order_by(order_by).all()
+        results = await async_item_sql_query_manager.query_manager.order_by(
+            order_by
+        ).all()
 
         for expected_item, result in zip(expected_items, results):
             assert result.as_dict() == expected_item.as_dict()
@@ -90,7 +93,9 @@ async def test_all__order_by__name__ok(
         ]:
             expected_items = list(reversed(items))
 
-        results = await async_item_sql_query_manager.query_manager.order_by(order_by).all()
+        results = await async_item_sql_query_manager.query_manager.order_by(
+            order_by
+        ).all()
 
         for expected_item, result in zip(expected_items, results):
             assert result.as_dict() == expected_item.as_dict()

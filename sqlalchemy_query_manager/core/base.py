@@ -1,13 +1,18 @@
 import typing
 
-from dataclass_sqlalchemy_mixins.base.mixins import SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
-from sqlalchemy import select, func, inspect
+from dataclass_sqlalchemy_mixins.base.mixins import (
+    SqlAlchemyFilterConverterMixin,
+    SqlAlchemyOrderConverterMixin,
+)
+from sqlalchemy import func, inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import InstrumentedAttribute, Session, DeclarativeMeta, joinedload
+from sqlalchemy.orm import DeclarativeMeta, InstrumentedAttribute, Session
 
 from sqlalchemy_query_manager.consts import classproperty
-from sqlalchemy_query_manager.core.transaction_context_manager import AsyncTransactionSessionContextManager, \
-    TransactionSessionContextManager
+from sqlalchemy_query_manager.core.transaction_context_manager import (
+    AsyncTransactionSessionContextManager,
+    TransactionSessionContextManager,
+)
 
 
 class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin):
@@ -94,7 +99,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
                 field = self.get_model_field(field)
             else:
                 raise NotImplementedError(
-                    'Should be either InstrumentedAttribute class or str'
+                    "Should be either InstrumentedAttribute class or str"
                 )
             _fields.append(field)
 
@@ -117,8 +122,10 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             )
 
             for model_binary_expression in models_binary_expressions:
-                self.models_to_join.extend(model_binary_expression.get('models'))
-                self._binary_expressions.append(model_binary_expression.get('binary_expression'))
+                self.models_to_join.extend(model_binary_expression.get("models"))
+                self._binary_expressions.append(
+                    model_binary_expression.get("binary_expression")
+                )
         return self._binary_expressions
 
     @property
@@ -129,8 +136,10 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             )
 
             for model_unary_expression in models_unary_expressions:
-                self.models_to_join.extend(model_unary_expression.get('models'))
-                self._binary_expressions.append(model_unary_expression.get('unary_expression'))
+                self.models_to_join.extend(model_unary_expression.get("models"))
+                self._binary_expressions.append(
+                    model_unary_expression.get("unary_expression")
+                )
 
         return self._binary_expressions
 
@@ -155,10 +164,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             if self.models_to_join != [
                 self.ConverterConfig.model,
             ]:
-                query = self.join_models(
-                    query=query,
-                    models=self.models_to_join
-                )
+                query = self.join_models(query=query, models=self.models_to_join)
             query = query.order_by(*self.unary_expressions)
 
         if self._offset:
@@ -230,15 +236,17 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             return result
 
     def get(self, session=None, **kwargs):
-        binary_expressions = self.get_binary_expressions(
-            filters=kwargs
-        )
+        binary_expressions = self.get_binary_expressions(filters=kwargs)
 
         with TransactionSessionContextManager(
             sessionmaker=self.sessionmaker,
             session=session or self.session,
         ) as session:
-            result = session.query(self.ConverterConfig.model).filter(*binary_expressions).first()
+            result = (
+                session.query(self.ConverterConfig.model)
+                .filter(*binary_expressions)
+                .first()
+            )
 
             if self.fields:
                 pass
@@ -265,7 +273,9 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             sessionmaker=self.sessionmaker,
             session=session,
         ) as session:
-            count = session.execute(select(func.count()).select_from(self.query)).scalar_one()
+            count = session.execute(
+                select(func.count()).select_from(self.query)
+            ).scalar_one()
         return count
 
     def with_session(self, session):
@@ -293,8 +303,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 class AsyncQueryManager(QueryManager):
     async def first(self, session=None):
         async with AsyncTransactionSessionContextManager(
-            sessionmaker=self.sessionmaker,
-            session=session
+            sessionmaker=self.sessionmaker, session=session
         ) as session:
             result = await session.execute(self.query)
 
@@ -307,8 +316,7 @@ class AsyncQueryManager(QueryManager):
         primary_key_row = getattr(self.ConverterConfig.model, primary_key)
 
         async with AsyncTransactionSessionContextManager(
-            sessionmaker=self.sessionmaker,
-            session=session
+            sessionmaker=self.sessionmaker, session=session
         ) as session:
             query = self.query.order_by(-primary_key_row)
 
@@ -319,25 +327,26 @@ class AsyncQueryManager(QueryManager):
             return result.first()
 
     async def get(self, session=None, **kwargs):
-        binary_expressions = self.get_binary_expressions(
-            filters=kwargs
-        )
+        binary_expressions = self.get_binary_expressions(filters=kwargs)
 
         async with AsyncTransactionSessionContextManager(
             sessionmaker=self.sessionmaker,
             session=session or self.session,
         ) as session:
             result = (
-                await session.execute(
-                    select(self.ConverterConfig.model).where(*binary_expressions)
+                (
+                    await session.execute(
+                        select(self.ConverterConfig.model).where(*binary_expressions)
+                    )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
         return result
 
     async def all(self, session=None):
         async with AsyncTransactionSessionContextManager(
-            sessionmaker=self.sessionmaker,
-            session=session
+            sessionmaker=self.sessionmaker, session=session
         ) as session:
             result = await session.execute(self.query)
 
@@ -348,10 +357,11 @@ class AsyncQueryManager(QueryManager):
 
     async def count(self, session=None):
         async with AsyncTransactionSessionContextManager(
-            sessionmaker=self.sessionmaker,
-            session=session
+            sessionmaker=self.sessionmaker, session=session
         ) as session:
-            count = (await session.execute(select(func.count()).select_from(self.query))).scalar_one()
+            count = (
+                await session.execute(select(func.count()).select_from(self.query))
+            ).scalar_one()
         return count
 
     async def create(self, session=None, **kwargs):
@@ -386,6 +396,7 @@ class ModelQueryManagerMixin(BaseModelQueryManagerMixin):
             sessionmaker=getattr(cls.QueryManagerConfig, "sessionmaker", None),
             session=getattr(cls.QueryManagerConfig, "session", None),
         )
+
 
 class AsyncModelQueryManagerMixin(BaseModelQueryManagerMixin):
     @classproperty

@@ -56,6 +56,8 @@ async def test_async_get_object__multiple_filters__ok(
 
     models_factory.ItemFactory.create()
 
-    returned_obj = await async_item_sql_query_manager.query_manager.get(id=item.id, name=item.name)
+    returned_obj = await async_item_sql_query_manager.query_manager.get(
+        id=item.id, name=item.name
+    )
 
     assert returned_obj.id == item.id

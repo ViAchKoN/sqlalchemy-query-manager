@@ -6,10 +6,7 @@ from tests import models_factory
 
 
 @pytest.mark.asyncio
-async def test_async_all__order_by__id__ok(
-    db_session,
-    async_item_sql_query_manager
-):
+async def test_async_all__order_by__id__ok(db_session, async_item_sql_query_manager):
     items = models_factory.ItemFactory.create_batch(size=5)
 
     for order_by in [
@@ -17,12 +14,12 @@ async def test_async_all__order_by__id__ok(
         "-id",
     ]:
         expected_items = items
-        if order_by in [
-            '-id'
-        ]:
+        if order_by in ["-id"]:
             expected_items = list(reversed(items))
 
-        results = await async_item_sql_query_manager.query_manager.order_by(order_by).all()
+        results = await async_item_sql_query_manager.query_manager.order_by(
+            order_by
+        ).all()
 
         for expected_item, result in zip(expected_items, results):
             assert result.as_dict() == expected_item.as_dict()
@@ -65,7 +62,6 @@ async def test_async_all__order_by__dates__ok(
     for order_by in [
         "created_at",
         "-created_at",
-
     ]:
         expected_items = items
         if order_by in [
@@ -73,7 +69,9 @@ async def test_async_all__order_by__dates__ok(
         ]:
             expected_items = list(reversed(items))
 
-        results = await async_item_sql_query_manager.query_manager.order_by(order_by).all()
+        results = await async_item_sql_query_manager.query_manager.order_by(
+            order_by
+        ).all()
 
         for expected_item, result in zip(expected_items, results):
             assert result.as_dict() == expected_item.as_dict()
@@ -104,7 +102,9 @@ async def test_async_all__order_by__name__ok(
         ]:
             expected_items = list(reversed(items))
 
-        results = await async_item_sql_query_manager.query_manager.order_by(order_by).all()
+        results = await async_item_sql_query_manager.query_manager.order_by(
+            order_by
+        ).all()
 
         for expected_item, result in zip(expected_items, results):
             assert result.as_dict() == expected_item.as_dict()

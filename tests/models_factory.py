@@ -2,7 +2,7 @@ import datetime as dt
 
 import factory
 
-from tests import models, conftest
+from tests import conftest, models
 
 
 class CustomSQLAlchemyModelFactory(factory.Factory):

@@ -1,7 +1,4 @@
-import pytest
-from sqlalchemy import select
-
-from tests import models, models_factory
+from tests import models_factory
 
 
 def test_all__all__order_by__id__ok(
@@ -32,10 +29,7 @@ def test_all__all__order_by__id__ok(
             assert result.as_dict() == expected_item.as_dict()
 
 
-def test_all__order_by__dates__ok(
-    db_session,
-    item_sql_query_manager
-):
+def test_all__order_by__dates__ok(db_session, item_sql_query_manager):
     items = []
     for i in range(5):
         items.append(
@@ -60,10 +54,7 @@ def test_all__order_by__dates__ok(
             assert result.as_dict() == expected_item.as_dict()
 
 
-def test_all__order_by__name__ok(
-    db_session,
-    item_sql_query_manager
-):
+def test_all__order_by__name__ok(db_session, item_sql_query_manager):
     items = []
     for name in [
         "aar",
