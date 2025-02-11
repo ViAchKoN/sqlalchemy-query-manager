@@ -1,5 +1,9 @@
 class BaseSessionContextManager:
-    def __init__(self, sessionmaker, session=None, ) -> None:  # type: ignore
+    def __init__(
+        self,
+        sessionmaker,
+        session=None,
+    ) -> None:  # type: ignore
         self.sessionmaker = sessionmaker
         self.session = session
 

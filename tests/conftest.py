@@ -11,7 +11,9 @@ from sqlalchemy_utils import create_database, database_exists, drop_database
 from tests.models import BaseModel
 
 
-TEST_DB_URL = "postgresql+psycopg2://{POSTGRES_CREDENTIALS}{POSTGRES_HOST}/sqlalchemy_name"
+TEST_DB_URL = (
+    "postgresql+psycopg2://{POSTGRES_CREDENTIALS}{POSTGRES_HOST}/sqlalchemy_name"
+)
 
 POSTGRES_CREDENTIALS = ""
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", None)
@@ -68,10 +70,9 @@ def async_db_engine(create_tables):
         poolclass=NullPool,
     )
 
+
 @pytest.fixture(scope="function")
-def async_db_sessionmaker(
-    async_db_engine
-):
+def async_db_sessionmaker(async_db_engine):
     return sessionmaker(
         async_db_engine,
         class_=AsyncSession,

@@ -1,8 +1,8 @@
-import pytest
 import datetime
 
-from tests import models_factory, models
-from tests.models import Item
+import pytest
+
+from tests import models, models_factory
 
 
 @pytest.mark.asyncio
@@ -17,7 +17,9 @@ async def test_async_all__filter__eq__ok(
     # Create unexpected items
     models_factory.ItemFactory.create_batch(size=4)
 
-    results = await async_item_sql_query_manager.query_manager.where(name=expected_item_name).all()
+    results = await async_item_sql_query_manager.query_manager.where(
+        name=expected_item_name
+    ).all()
 
     assert len(results) == 1
 
@@ -46,7 +48,11 @@ async def test_async_all__filter__multiple_filters__ok(
 
     query = query.where(name=expected_item_name)
     query = query.where(number=1)
-    query = query.where(number__not_in=[999, ])
+    query = query.where(
+        number__not_in=[
+            999,
+        ]
+    )
 
     results = await query.all()
 
@@ -93,7 +99,9 @@ async def test_async_all__filter__in_not_in__ok(
         ("number__in", [fourth_item, fifth_item]),
         ("number__not_in", [first_item, second_item, third_item]),
     ):
-        results = await async_item_sql_query_manager.query_manager.where(**{field: [fourth_number, fifth_number]}).all()
+        results = await async_item_sql_query_manager.query_manager.where(
+            **{field: [fourth_number, fifth_number]}
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -136,7 +144,9 @@ async def test_async_all__filter__in_not_in__dates__ok(
         ("created_at__in", [fourth_item, fifth_item]),
         ("created_at__not_in", [first_item, second_item, third_item]),
     ):
-        results = await async_item_sql_query_manager.query_manager.where(**{field: [fourth_date, fifth_date]}).all()
+        results = await async_item_sql_query_manager.query_manager.where(
+            **{field: [fourth_date, fifth_date]}
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -162,7 +172,9 @@ async def test_async_all__filter__gt_lt_gte_lte__ok(
         ("number__gte", [3, 4, 5]),
         ("number__lte", [1, 2, 3]),
     ):
-        results = await async_item_sql_query_manager.query_manager.where(**{field: 3}).all()
+        results = await async_item_sql_query_manager.query_manager.where(
+            **{field: 3}
+        ).all()
 
         assert len(results) == len(expected_item_numbers)
 
@@ -193,7 +205,9 @@ async def test_async_all__filter__not__ok(
 
     assert db_session.query(models.Item).count() == 4
 
-    results = await async_item_sql_query_manager.query_manager.where(name__not=not_expected_item_name).all()
+    results = await async_item_sql_query_manager.query_manager.where(
+        name__not=not_expected_item_name
+    ).all()
 
     assert len(results) == len(expected_item_names)
 
@@ -228,7 +242,9 @@ async def test_async_all__filter__is_is_not__ok(
         ),
     ):
 
-        results = await async_item_sql_query_manager.query_manager.where(is_valid__is=is_valid).all()
+        results = await async_item_sql_query_manager.query_manager.where(
+            is_valid__is=is_valid
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -249,7 +265,9 @@ async def test_async_all__filter__is_is_not__ok(
             ],
         ),
     ):
-        results = await async_item_sql_query_manager.query_manager.where(is_valid__is_not=is_valid).all()
+        results = await async_item_sql_query_manager.query_manager.where(
+            is_valid__is_not=is_valid
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -285,7 +303,9 @@ async def test_async_all__filter__like_ilike__ok(
             ],
         ),
     ):
-        results = await async_item_sql_query_manager.query_manager.where(**{field: filter_value}).all()
+        results = await async_item_sql_query_manager.query_manager.where(
+            **{field: filter_value}
+        ).all()
 
         assert len(results) == len(expected_items)
 

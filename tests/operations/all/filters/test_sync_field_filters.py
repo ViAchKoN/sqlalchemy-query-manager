@@ -1,6 +1,6 @@
 import datetime
 
-from tests import models_factory, models
+from tests import models, models_factory
 
 
 def test_all__filter__eq__ok(
@@ -42,7 +42,11 @@ def test_all__filter__multiple_filters__ok(
 
     query = query.where(name=expected_item_name)
     query = query.where(number=1)
-    query = query.where(number__not_in=[999, ])
+    query = query.where(
+        number__not_in=[
+            999,
+        ]
+    )
 
     results = query.all()
 
@@ -88,7 +92,9 @@ def test_all__filter__in_not_in__ok(
         ("number__in", [fourth_item, fifth_item]),
         ("number__not_in", [first_item, second_item, third_item]),
     ):
-        results = item_sql_query_manager.query_manager.where(**{field: [fourth_number, fifth_number]}).all()
+        results = item_sql_query_manager.query_manager.where(
+            **{field: [fourth_number, fifth_number]}
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -130,7 +136,9 @@ def test_all__filter__in_not_in__dates__ok(
         ("created_at__in", [fourth_item, fifth_item]),
         ("created_at__not_in", [first_item, second_item, third_item]),
     ):
-        results = item_sql_query_manager.query_manager.where(**{field: [fourth_date, fifth_date]}).all()
+        results = item_sql_query_manager.query_manager.where(
+            **{field: [fourth_date, fifth_date]}
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -185,7 +193,9 @@ def test_all__filter__not__ok(
 
     assert db_session.query(models.Item).count() == 4
 
-    results = item_sql_query_manager.query_manager.where(name__not=not_expected_item_name).all()
+    results = item_sql_query_manager.query_manager.where(
+        name__not=not_expected_item_name
+    ).all()
 
     assert len(results) == len(expected_item_names)
 
@@ -219,7 +229,9 @@ def test_all__filter__is_is_not__ok(
         ),
     ):
 
-        results = item_sql_query_manager.query_manager.where(is_valid__is=is_valid).all()
+        results = item_sql_query_manager.query_manager.where(
+            is_valid__is=is_valid
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -240,7 +252,9 @@ def test_all__filter__is_is_not__ok(
             ],
         ),
     ):
-        results = item_sql_query_manager.query_manager.where(is_valid__is_not=is_valid).all()
+        results = item_sql_query_manager.query_manager.where(
+            is_valid__is_not=is_valid
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -275,7 +289,9 @@ def test_all__filter__like_ilike__ok(
             ],
         ),
     ):
-        results = item_sql_query_manager.query_manager.where(**{field: filter_value}).all()
+        results = item_sql_query_manager.query_manager.where(
+            **{field: filter_value}
+        ).all()
 
         assert len(results) == len(expected_items)
 

@@ -1,8 +1,6 @@
 import datetime as dt
-import typing as tp
 
 import pytest
-from sqlalchemy import select
 
 from tests import models, models_factory
 
@@ -29,7 +27,9 @@ async def test_async_all__filter__eq__ok(
 
     assert db_session.query(models.Item).count() == 5
 
-    results = await async_item_sql_query_manager.query_manager.where(group__name=expected_group_name).all()
+    results = await async_item_sql_query_manager.query_manager.where(
+        group__name=expected_group_name
+    ).all()
 
     assert len(results) == 1
 
@@ -91,7 +91,9 @@ async def test_async_all__filter__in_not_in__ok(
             ],
         ),
     ):
-        results = await async_item_sql_query_manager.query_manager.where(**{field: filter_values}).all()
+        results = await async_item_sql_query_manager.query_manager.where(
+            **{field: filter_values}
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -152,7 +154,9 @@ async def test_async_all__filter__in_not_in__list_as_string__ok(
             ],
         ),
     ):
-        results = await async_item_sql_query_manager.query_manager.where(**{field: filter_values}).all()
+        results = await async_item_sql_query_manager.query_manager.where(
+            **{field: filter_values}
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -211,7 +215,9 @@ async def test_async_all__filter__in_not_in__dates__ok(
             ],
         ),
     ):
-        results = await async_item_sql_query_manager.query_manager.where(**{field: filter_values}).all()
+        results = await async_item_sql_query_manager.query_manager.where(
+            **{field: filter_values}
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -221,8 +227,7 @@ async def test_async_all__filter__in_not_in__dates__ok(
 
 @pytest.mark.asyncio
 async def test_async_all__filter__gt_lt_gte_lte__date__ok(
-    db_session,
-    async_item_sql_query_manager
+    db_session, async_item_sql_query_manager
 ):
     now = dt.datetime.now()
 
@@ -268,7 +273,9 @@ async def test_async_all__filter__gt_lt_gte_lte__date__ok(
             ],
         ),
     ):
-        results = await async_item_sql_query_manager.query_manager.where(**{field: filter_values}).all()
+        results = await async_item_sql_query_manager.query_manager.where(
+            **{field: filter_values}
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -277,10 +284,7 @@ async def test_async_all__filter__gt_lt_gte_lte__date__ok(
 
 
 @pytest.mark.asyncio
-async def test_async_all__filter__not__ok(
-    db_session,
-    async_item_sql_query_manager
-):
+async def test_async_all__filter__not__ok(db_session, async_item_sql_query_manager):
     first_group_name = "first_group_name"
 
     first_group = models_factory.GroupFactory.create(
@@ -322,7 +326,9 @@ async def test_async_all__filter__not__ok(
             ],
         ),
     ):
-        results = await async_item_sql_query_manager.query_manager.where(**{field: filter_values}).all()
+        results = await async_item_sql_query_manager.query_manager.where(
+            **{field: filter_values}
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -332,8 +338,7 @@ async def test_async_all__filter__not__ok(
 
 @pytest.mark.asyncio
 async def test_async_all__filter__is_is_not__ok(
-    db_session,
-    async_item_sql_query_manager
+    db_session, async_item_sql_query_manager
 ):
     active_group = models_factory.GroupFactory.create(is_active=True, with_item=True)
     first_item = (
@@ -359,7 +364,9 @@ async def test_async_all__filter__is_is_not__ok(
             ],
         ),
     ):
-        results = await async_item_sql_query_manager.query_manager.where(**{field: filter_values}).all()
+        results = await async_item_sql_query_manager.query_manager.where(
+            **{field: filter_values}
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -369,8 +376,7 @@ async def test_async_all__filter__is_is_not__ok(
 
 @pytest.mark.asyncio
 async def test_async_all__filter__like_ilike__ok(
-    db_session,
-    async_item_sql_query_manager
+    db_session, async_item_sql_query_manager
 ):
     first_group = models_factory.GroupFactory.create(name="first name", with_item=True)
     first_item = (
@@ -406,7 +412,9 @@ async def test_async_all__filter__like_ilike__ok(
             ],
         ),
     ):
-        results = await async_item_sql_query_manager.query_manager.where(**{field: filter_value}).all()
+        results = await async_item_sql_query_manager.query_manager.where(
+            **{field: filter_value}
+        ).all()
 
         assert len(results) == len(expected_items)
 

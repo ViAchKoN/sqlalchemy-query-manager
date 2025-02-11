@@ -26,7 +26,9 @@ def test_where_object_only__ok(
 
     models_factory.ItemFactory.create()
 
-    returned_obj_record = item_sql_query_manager.query_manager.where(id=item.id).only(Item.id).first()
+    returned_obj_record = (
+        item_sql_query_manager.query_manager.where(id=item.id).only(Item.id).first()
+    )
 
     assert isinstance(returned_obj_record, Row)
 
@@ -41,7 +43,9 @@ def test_where_object_only__as_str__ok(
 
     models_factory.ItemFactory.create()
 
-    returned_obj_record = item_sql_query_manager.query_manager.where(id=item.id).only('id').first()
+    returned_obj_record = (
+        item_sql_query_manager.query_manager.where(id=item.id).only("id").first()
+    )
 
     assert isinstance(returned_obj_record, Row)
 
@@ -57,7 +61,9 @@ async def test_async_where_object_first__ok(
 
     models_factory.ItemFactory.create()
 
-    returned_obj = await async_item_sql_query_manager.query_manager.where(id=item.id).first()
+    returned_obj = await async_item_sql_query_manager.query_manager.where(
+        id=item.id
+    ).first()
 
     assert returned_obj.as_dict() == item.as_dict()
 
@@ -71,7 +77,11 @@ async def test_async_where_object_only__ok(
 
     models_factory.ItemFactory.create()
 
-    returned_obj_record = await async_item_sql_query_manager.query_manager.where(id=item.id).only(Item.id).first()
+    returned_obj_record = (
+        await async_item_sql_query_manager.query_manager.where(id=item.id)
+        .only(Item.id)
+        .first()
+    )
 
     assert isinstance(returned_obj_record, Row)
 
@@ -87,7 +97,11 @@ async def test_async_where_object_only_field_as_str__ok(
 
     models_factory.ItemFactory.create()
 
-    returned_obj_record = await async_item_sql_query_manager.query_manager.where(id=item.id).only('id').first()
+    returned_obj_record = (
+        await async_item_sql_query_manager.query_manager.where(id=item.id)
+        .only("id")
+        .first()
+    )
 
     assert isinstance(returned_obj_record, Row)
 

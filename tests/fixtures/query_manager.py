@@ -1,6 +1,9 @@
 import pytest
 
-from sqlalchemy_query_manager.core.base import AsyncModelQueryManagerMixin, ModelQueryManagerMixin
+from sqlalchemy_query_manager.core.base import (
+    AsyncModelQueryManagerMixin,
+    ModelQueryManagerMixin,
+)
 from tests.models import Item
 
 

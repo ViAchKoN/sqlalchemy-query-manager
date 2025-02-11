@@ -3,10 +3,7 @@ import datetime as dt
 from tests import models_factory
 
 
-def test_order_by__id__ok(
-    db_session,
-    item_sql_query_manager
-):
+def test_order_by__id__ok(db_session, item_sql_query_manager):
     items = models_factory.ItemFactory.create_batch(size=5)
 
     for order_by in [
@@ -14,9 +11,7 @@ def test_order_by__id__ok(
         "-id",
     ]:
         expected_items = items
-        if order_by in [
-            '-id'
-        ]:
+        if order_by in ["-id"]:
             expected_items = list(reversed(items))
 
         results = item_sql_query_manager.query_manager.order_by(order_by).all()
@@ -61,7 +56,6 @@ def test_order_by__dates__ok(
     for order_by in [
         "created_at",
         "-created_at",
-
     ]:
         expected_items = items
         if order_by in [

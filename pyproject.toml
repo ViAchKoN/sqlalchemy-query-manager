@@ -21,6 +21,12 @@ psycopg2-binary = "^2.9.9"
 asyncpg = "^0.29.0"
 pytest-asyncio = "^0.24.0"
 greenlet = "^3.0.3"
+black = "^24.4.2"
+isort = "^5.13.2"
+pytest-cov = "^5.0.0"
+flake8 = "^7.1.0"
+pre-commit = "^3.0"
+
 
 [build-system]
 requires = ["poetry-core"]

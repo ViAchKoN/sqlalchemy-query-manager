@@ -24,7 +24,9 @@ def test_all__filter__eq__ok(
 
     assert db_session.query(models.Item).count() == 5
 
-    results = item_sql_query_manager.query_manager.where(group__name=expected_group_name).all()
+    results = item_sql_query_manager.query_manager.where(
+        group__name=expected_group_name
+    ).all()
 
     assert len(results) == 1
 
@@ -85,7 +87,9 @@ def test_all__filter__in_not_in__ok(
             ],
         ),
     ):
-        results = item_sql_query_manager.query_manager.where(**{field: filter_values}).all()
+        results = item_sql_query_manager.query_manager.where(
+            **{field: filter_values}
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -145,7 +149,9 @@ def test_all__filter__in_not_in__list_as_string__ok(
             ],
         ),
     ):
-        results = item_sql_query_manager.query_manager.where(**{field: filter_values}).all()
+        results = item_sql_query_manager.query_manager.where(
+            **{field: filter_values}
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -203,7 +209,9 @@ def test_all__filter__in_not_in__dates__ok(
             ],
         ),
     ):
-        results = item_sql_query_manager.query_manager.where(**{field: filter_values}).all()
+        results = item_sql_query_manager.query_manager.where(
+            **{field: filter_values}
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -211,10 +219,7 @@ def test_all__filter__in_not_in__dates__ok(
             assert result.as_dict() == expected_item.as_dict()
 
 
-def test_all__filter__gt_lt_gte_lte__date__ok(
-    db_session,
-    item_sql_query_manager
-):
+def test_all__filter__gt_lt_gte_lte__date__ok(db_session, item_sql_query_manager):
     now = dt.datetime.now()
 
     first_date = now + dt.timedelta(days=1)
@@ -259,7 +264,9 @@ def test_all__filter__gt_lt_gte_lte__date__ok(
             ],
         ),
     ):
-        results = item_sql_query_manager.query_manager.where(**{field: filter_values}).all()
+        results = item_sql_query_manager.query_manager.where(
+            **{field: filter_values}
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -267,10 +274,7 @@ def test_all__filter__gt_lt_gte_lte__date__ok(
             assert result.as_dict() == expected_item.as_dict()
 
 
-def test_all__filter__not__ok(
-    db_session,
-    item_sql_query_manager
-):
+def test_all__filter__not__ok(db_session, item_sql_query_manager):
     first_group_name = "first_group_name"
 
     first_group = models_factory.GroupFactory.create(
@@ -312,7 +316,9 @@ def test_all__filter__not__ok(
             ],
         ),
     ):
-        results = item_sql_query_manager.query_manager.where(**{field: filter_values}).all()
+        results = item_sql_query_manager.query_manager.where(
+            **{field: filter_values}
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -320,10 +326,7 @@ def test_all__filter__not__ok(
             assert result.as_dict() == expected_item.as_dict()
 
 
-def test_all__filter__is_is_not__ok(
-    db_session,
-    item_sql_query_manager
-):
+def test_all__filter__is_is_not__ok(db_session, item_sql_query_manager):
     active_group = models_factory.GroupFactory.create(is_active=True, with_item=True)
     first_item = (
         db_session.query(models.Item)
@@ -348,7 +351,9 @@ def test_all__filter__is_is_not__ok(
             ],
         ),
     ):
-        results = item_sql_query_manager.query_manager.where(**{field: filter_values}).all()
+        results = item_sql_query_manager.query_manager.where(
+            **{field: filter_values}
+        ).all()
 
         assert len(results) == len(expected_items)
 
@@ -356,10 +361,7 @@ def test_all__filter__is_is_not__ok(
             assert result.as_dict() == expected_item.as_dict()
 
 
-def test_all__filter__like_ilike__ok(
-    db_session,
-    item_sql_query_manager
-):
+def test_all__filter__like_ilike__ok(db_session, item_sql_query_manager):
     first_group = models_factory.GroupFactory.create(name="first name", with_item=True)
     first_item = (
         db_session.query(models.Item)
@@ -394,7 +396,9 @@ def test_all__filter__like_ilike__ok(
             ],
         ),
     ):
-        results = item_sql_query_manager.query_manager.where(**{field: filter_value}).all()
+        results = item_sql_query_manager.query_manager.where(
+            **{field: filter_value}
+        ).all()
 
         assert len(results) == len(expected_items)
 
