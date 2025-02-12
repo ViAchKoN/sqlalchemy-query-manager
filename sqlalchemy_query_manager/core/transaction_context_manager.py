@@ -8,7 +8,7 @@ class BaseSessionContextManager:
         session,
     ) -> None:  # type: ignore
         self.session = session
-        self.__to_exit = False
+        self._to_exit = False
 
 
 class TransactionSessionContextManager(BaseSessionContextManager):
@@ -31,7 +31,7 @@ class AsyncTransactionSessionContextManager(BaseSessionContextManager):
     async def __aenter__(self):  # type: ignore
         if isinstance(self.session, sessionmaker):
             self.resource = await self.session().__aenter__()
-            self.__to_exit = True
+            self._to_exit = True
         elif isinstance(self.session, AsyncSession):
             self.resource = self.session
         else:
@@ -39,5 +39,5 @@ class AsyncTransactionSessionContextManager(BaseSessionContextManager):
         return self.resource
 
     async def __aexit__(self, exc_type, exc, tb):  # type: ignore
-        if self.__to_exit:
+        if self._to_exit:
             await self.resource.__aexit__(exc_type, exc, tb)

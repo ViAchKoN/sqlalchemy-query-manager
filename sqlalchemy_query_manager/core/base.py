@@ -18,10 +18,10 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         self.session: typing.Union[Session, AsyncSession, sessionmaker] = session
 
-        self.__to_commit = False
+        self._to_commit = False
 
         if isinstance(self.session, sessionmaker):
-            self.__to_commit = True
+            self._to_commit = True
 
         self.fields = None
 
@@ -274,7 +274,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
     def create(self, session=None, expunge=True, **kwargs):
         new_obj = self.ConverterConfig.model(**kwargs)
         session.add(new_obj)
-        if self.__to_commit:
+        if self._to_commit:
             session.commit()
         else:
             session.flush()
