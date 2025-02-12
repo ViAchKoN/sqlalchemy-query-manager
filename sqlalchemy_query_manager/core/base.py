@@ -6,21 +6,22 @@ from dataclass_sqlalchemy_mixins.base.mixins import (
 )
 from sqlalchemy import func, inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import DeclarativeMeta, InstrumentedAttribute, Session
+from sqlalchemy.orm import DeclarativeMeta, InstrumentedAttribute, Session, sessionmaker
 
 from sqlalchemy_query_manager.consts import classproperty
-from sqlalchemy_query_manager.core.transaction_context_manager import (
-    AsyncTransactionSessionContextManager,
-    TransactionSessionContextManager,
-)
+from sqlalchemy_query_manager.core.utils import get_async_session, get_session
 
 
 class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin):
-    def __init__(self, model, sessionmaker=None, session=None):
+    def __init__(self, model, session=None):
         self.ConverterConfig.model = model
 
-        self.sessionmaker: "sessionmaker" = sessionmaker
-        self.session: typing.Union[Session, AsyncSession] = session
+        self.session: typing.Union[Session, AsyncSession, sessionmaker] = session
+
+        self._to_commit = False
+
+        if isinstance(self.session, sessionmaker):
+            self._to_commit = True
 
         self.fields = None
 
@@ -34,6 +35,8 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         self._binary_expressions = []
         self._unary_expressions = []
+
+        """Decorator that provides a session from a sessionmaker inside a class."""
 
     def join_models(
         self,
@@ -175,83 +178,71 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         return query
 
-    def all(self, session=None):
-        with TransactionSessionContextManager(
-            sessionmaker=self.sessionmaker,
-            session=session,
-        ) as session:
-            result = session.execute(self.query)
+    @get_session
+    def all(self, session=None, expunge=True):
+        result = session.execute(self.query)
 
-            if not self.fields:
-                result = result.scalars()
+        if not self.fields:
+            result = result.scalars()
 
-            result = result.all()
+        result = result.all()
 
-            if result and (not session or not self.session):
-                session.expunge_all()
+        if result and expunge:
+            session.expunge_all()
 
-            return result
+        return result
 
-    def first(self, session=None):
-        with TransactionSessionContextManager(
-            sessionmaker=self.sessionmaker,
-            session=session,
-        ) as session:
-            result = session.execute(self.query)
+    @get_session
+    def first(self, session=None, expunge=True):
+        result = session.execute(self.query)
 
-            if not self.fields:
-                result = result.scalars()
+        if not self.fields:
+            result = result.scalars()
 
-            result = result.first()
+        result = result.first()
 
-            if self.fields:
-                pass
-            elif result and (not session or not self.session):
-                session.expunge(result)
+        if self.fields:
+            pass
+        elif result and expunge:
+            session.expunge(result)
 
-            return result
+        return result
 
-    def last(self, session=None):
+    @get_session
+    def last(self, session=None, expunge=True):
         primary_key = inspect(self.ConverterConfig.model).primary_key[0].name
         primary_key_row = getattr(self.ConverterConfig.model, primary_key)
 
-        with TransactionSessionContextManager(
-            sessionmaker=self.sessionmaker,
-            session=session,
-        ) as session:
-            query = self.query.order_by(-primary_key_row)
+        query = self.query.order_by(-primary_key_row)
 
-            result = session.execute(query)
+        result = session.execute(query)
 
-            if not self.fields:
-                result = result.scalars()
+        if not self.fields:
+            result = result.scalars()
 
-            result = result.first()
+        result = result.first()
 
-            if self.fields:
-                pass
-            elif result and (not session or not self.session):
-                session.expunge(result)
+        if self.fields:
+            pass
+        elif result and expunge:
+            session.expunge(result)
 
-            return result
+        return result
 
-    def get(self, session=None, **kwargs):
+    @get_session
+    def get(self, session=None, expunge=True, **kwargs):
         binary_expressions = self.get_binary_expressions(filters=kwargs)
 
-        with TransactionSessionContextManager(
-            sessionmaker=self.sessionmaker,
-            session=session or self.session,
-        ) as session:
-            result = (
-                session.query(self.ConverterConfig.model)
-                .filter(*binary_expressions)
-                .first()
-            )
+        result = (
+            session.query(self.ConverterConfig.model)
+            .filter(*binary_expressions)
+            .first()
+        )
 
-            if self.fields:
-                pass
-            elif result and (not session or not self.session):
-                session.expunge(result)
+        if self.fields:
+            pass
+        elif result and expunge:
+            session.expunge(result)
 
         return result
 
@@ -268,120 +259,100 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         return self
 
-    def count(self, session=None):
-        with TransactionSessionContextManager(
-            sessionmaker=self.sessionmaker,
-            session=session,
-        ) as session:
-            count = session.execute(
-                select(func.count()).select_from(self.query)
-            ).scalar_one()
+    @get_session
+    def count(self, session=None, **kwargs):
+        count = session.execute(
+            select(func.count()).select_from(self.query)
+        ).scalar_one()
         return count
 
     def with_session(self, session):
         self.session = session
         return self
 
-    def create(self, session=None, **kwargs):
-        with TransactionSessionContextManager(
-            sessionmaker=self.sessionmaker,
-            session=session,
-        ) as session:
-            new_obj = self.ConverterConfig.model(**kwargs)
-            session.add(new_obj)
-            if self.sessionmaker:
-                session.commit()
-            else:
-                session.flush()
-            session.refresh(new_obj)
+    @get_session
+    def create(self, session=None, expunge=True, **kwargs):
+        new_obj = self.ConverterConfig.model(**kwargs)
+        session.add(new_obj)
+        if self._to_commit:
+            session.commit()
+        else:
+            session.flush()
+        session.refresh(new_obj)
 
-            if not session or not self.session:
-                session.expunge(new_obj)
+        if expunge:
+            session.expunge(new_obj)
         return new_obj
 
 
 class AsyncQueryManager(QueryManager):
+
+    @get_async_session
     async def first(self, session=None):
-        async with AsyncTransactionSessionContextManager(
-            sessionmaker=self.sessionmaker, session=session
-        ) as session:
-            result = await session.execute(self.query)
+        result = await session.execute(self.query)
 
-            if not self.fields:
-                result = result.scalars()
-            return result.first()
+        if not self.fields:
+            result = result.scalars()
+        return result.first()
 
+    @get_async_session
     async def last(self, session=None):
         primary_key = inspect(self.ConverterConfig.model).primary_key[0].name
         primary_key_row = getattr(self.ConverterConfig.model, primary_key)
 
-        async with AsyncTransactionSessionContextManager(
-            sessionmaker=self.sessionmaker, session=session
-        ) as session:
-            query = self.query.order_by(-primary_key_row)
+        query = self.query.order_by(-primary_key_row)
 
-            result = await session.execute(query)
+        result = await session.execute(query)
 
-            if not self.fields:
-                result = result.scalars()
-            return result.first()
+        if not self.fields:
+            result = result.scalars()
+        return result.first()
 
+    @get_async_session
     async def get(self, session=None, **kwargs):
         binary_expressions = self.get_binary_expressions(filters=kwargs)
 
-        async with AsyncTransactionSessionContextManager(
-            sessionmaker=self.sessionmaker,
-            session=session or self.session,
-        ) as session:
-            result = (
-                (
-                    await session.execute(
-                        select(self.ConverterConfig.model).where(*binary_expressions)
-                    )
+        result = (
+            (
+                await session.execute(
+                    select(self.ConverterConfig.model).where(*binary_expressions)
                 )
-                .scalars()
-                .first()
             )
+            .scalars()
+            .first()
+        )
         return result
 
+    @get_async_session
     async def all(self, session=None):
-        async with AsyncTransactionSessionContextManager(
-            sessionmaker=self.sessionmaker, session=session
-        ) as session:
-            result = await session.execute(self.query)
+        result = await session.execute(self.query)
 
-            if not self.fields:
-                result = result.scalars()
+        if not self.fields:
+            result = result.scalars()
 
-            return result.all()
+        return result.all()
 
+    @get_async_session
     async def count(self, session=None):
-        async with AsyncTransactionSessionContextManager(
-            sessionmaker=self.sessionmaker, session=session
-        ) as session:
-            count = (
-                await session.execute(select(func.count()).select_from(self.query))
-            ).scalar_one()
+        count = (
+            await session.execute(select(func.count()).select_from(self.query))
+        ).scalar_one()
         return count
 
+    @get_async_session
     async def create(self, session=None, **kwargs):
-        async with AsyncTransactionSessionContextManager(
-            sessionmaker=self.sessionmaker,
-            session=session,
-        ) as session:
-            new_obj = self.ConverterConfig.model(**kwargs)
-            session.add(new_obj)
-            if self.sessionmaker:
-                await session.commit()
-            else:
-                await session.flush()
-            await session.refresh(new_obj)
+        new_obj = self.ConverterConfig.model(**kwargs)
+        session.add(new_obj)
+        if isinstance(self.session, sessionmaker):
+            await session.commit()
+        else:
+            await session.flush()
+        await session.refresh(new_obj)
         return new_obj
 
 
 class BaseModelQueryManagerMixin:
     class QueryManagerConfig:
-        sessionmaker = None
         session = None
 
     def as_dict(self) -> typing.Dict[str, str]:
@@ -393,7 +364,6 @@ class ModelQueryManagerMixin(BaseModelQueryManagerMixin):
     def query_manager(cls):
         return QueryManager(
             model=cls,
-            sessionmaker=getattr(cls.QueryManagerConfig, "sessionmaker", None),
             session=getattr(cls.QueryManagerConfig, "session", None),
         )
 
@@ -403,6 +373,5 @@ class AsyncModelQueryManagerMixin(BaseModelQueryManagerMixin):
     def query_manager(cls):
         return AsyncQueryManager(
             model=cls,
-            sessionmaker=getattr(cls.QueryManagerConfig, "sessionmaker", None),
             session=getattr(cls.QueryManagerConfig, "session", None),
         )
