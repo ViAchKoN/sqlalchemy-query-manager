@@ -105,7 +105,7 @@ Session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 class ObjectModel(BaseModel, ModelQueryManagerMixin):
     class QueryManagerConfig:
-        sessionmaker = Session 
+        session = Session 
 ```
 
 For **`async`** support, import `AsyncModelQueryManagerMixin`.
@@ -126,7 +126,7 @@ Session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 class ObjectModel(BaseModel, AsyncModelQueryManagerMixin):
     class QueryManagerConfig:
-        sessionmaker = Session 
+        session = Session 
 ```
 
 **Flask Integration**

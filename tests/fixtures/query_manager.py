@@ -11,7 +11,7 @@ from tests.models import Item
 def item_sql_query_manager(sync_db_sessionmaker):
     class InjectedItem(Item, ModelQueryManagerMixin):
         class QueryManagerConfig:
-            sessionmaker = sync_db_sessionmaker
+            session = sync_db_sessionmaker
 
     return InjectedItem
 
@@ -20,6 +20,6 @@ def item_sql_query_manager(sync_db_sessionmaker):
 def async_item_sql_query_manager(async_db_sessionmaker):
     class InjectedItem(Item, AsyncModelQueryManagerMixin):
         class QueryManagerConfig:
-            sessionmaker = async_db_sessionmaker
+            session = async_db_sessionmaker
 
     return InjectedItem
