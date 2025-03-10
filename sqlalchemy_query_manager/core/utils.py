@@ -7,6 +7,8 @@ from sqlalchemy_query_manager.core.transaction_context_manager import (
 
 
 def get_session(func):
+    """Decorator that provides a sync session from inside a class."""
+
     @wraps(func)
     def wrapper(self, *args, session=None, **kwargs):
         with TransactionSessionContextManager(
@@ -22,6 +24,8 @@ def get_session(func):
 
 
 def get_async_session(func):
+    """Decorator that provides an async session from inside a class."""
+
     @wraps(func)
     async def wrapper(self, *args, session=None, **kwargs):
         async with AsyncTransactionSessionContextManager(

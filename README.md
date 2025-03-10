@@ -219,6 +219,26 @@ db_objects = ObjectModel.query_manager.order_by('id').all()
 db_objects = ObjectModel.query_manager.order_by('-id').all()
 ```
 
+The package introduces the **`E` class**, which allows applying specific **ordering methods** to fields.  
+Currently, it supports:  
+
+- **`nulls_last`** – Places `NULL` values **at the end**  
+- **`nulls_first`** – Places `NULL` values **at the beginning**  
+
+```python
+from sqlalchemy_query_manager.helpers import E
+
+# Order by name, placing NULL values last
+results = ObjectModel.query_manager.order_by(
+    E('name', nulls_last)
+).all()
+
+# Order by name, placing NULL values first
+results = ObjectModel.query_manager.order_by(
+    E('name', nulls_first)
+).all()
+```
+
 **Supported Operations**
 
 The package supports the following operations for filtering queries:

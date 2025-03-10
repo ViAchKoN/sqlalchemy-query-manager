@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import DeclarativeMeta, InstrumentedAttribute, Session, sessionmaker
 
 from sqlalchemy_query_manager.consts import classproperty
+from sqlalchemy_query_manager.core.helpers import E
 from sqlalchemy_query_manager.core.utils import get_async_session, get_session
 
 
@@ -35,8 +36,6 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         self._binary_expressions = []
         self._unary_expressions = []
-
-        """Decorator that provides a session from a sessionmaker inside a class."""
 
     def join_models(
         self,
@@ -134,17 +133,33 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
     @property
     def unary_expressions(self):
         if not self._unary_expressions and self._order_by:
+            _order_by = list(self._order_by)
+
+            to_order_by = []
+            e_pos = []
+            for pos, order_by in enumerate(_order_by):
+                if isinstance(order_by, E):
+                    to_order_by.append(order_by.field_name)
+                    e_pos.append(pos)
+                else:
+                    to_order_by.append(order_by)
+
             models_unary_expressions = self.get_models_unary_expressions(
-                order_by=self._order_by
+                order_by=to_order_by
             )
 
-            for model_unary_expression in models_unary_expressions:
+            for pos, model_unary_expression in enumerate(models_unary_expressions):
                 self.models_to_join.extend(model_unary_expression.get("models"))
-                self._binary_expressions.append(
-                    model_unary_expression.get("unary_expression")
-                )
 
-        return self._binary_expressions
+                unary_expression = model_unary_expression.get("unary_expression")
+
+                if pos in e_pos:
+                    func_to_apply = _order_by[pos].func
+                    unary_expression = func_to_apply(unary_expression)
+
+                self._unary_expressions.append(unary_expression)
+
+        return self._unary_expressions
 
     @property
     def query(self):

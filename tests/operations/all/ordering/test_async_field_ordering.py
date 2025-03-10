@@ -1,7 +1,9 @@
 import datetime as dt
 
 import pytest
+from sqlalchemy import nulls_first, nulls_last
 
+from sqlalchemy_query_manager.core.helpers import E
 from tests import models_factory
 
 
@@ -104,6 +106,80 @@ async def test_async_all__order_by__name__ok(
 
         results = await async_item_sql_query_manager.query_manager.order_by(
             order_by
+        ).all()
+
+        for expected_item, result in zip(expected_items, results):
+            assert result.as_dict() == expected_item.as_dict()
+
+
+@pytest.mark.asyncio
+async def test_async_all__order_by__name__nulls_last__ok(
+    db_session,
+    async_item_sql_query_manager,
+):
+    items = []
+
+    for name in [
+        "aar",
+        "abc",
+        "cat",
+        "wow",
+    ]:
+        items.append(models_factory.ItemFactory.create(name=name))
+
+    null_name_item = models_factory.ItemFactory.create(name=None)
+
+    for order_by in [
+        "name",
+        "-name",
+    ]:
+        expected_items = items.copy()
+        if order_by in [
+            "-name",
+        ]:
+            expected_items = list(reversed(items))
+
+        expected_items.append(null_name_item)
+
+        results = await async_item_sql_query_manager.query_manager.order_by(
+            E(order_by, nulls_last)
+        ).all()
+
+        for expected_item, result in zip(expected_items, results):
+            assert result.as_dict() == expected_item.as_dict()
+
+
+@pytest.mark.asyncio
+async def test_async_all__order_by__name__nulls_first__ok(
+    db_session,
+    async_item_sql_query_manager,
+):
+    items = []
+
+    for name in [
+        "aar",
+        "abc",
+        "cat",
+        "wow",
+    ]:
+        items.append(models_factory.ItemFactory.create(name=name))
+
+    null_name_item = models_factory.ItemFactory.create(name=None)
+
+    for order_by in [
+        "name",
+        "-name",
+    ]:
+        expected_items = items.copy()
+        if order_by in [
+            "-name",
+        ]:
+            expected_items = list(reversed(items))
+
+        expected_items.insert(0, null_name_item)
+
+        results = await async_item_sql_query_manager.query_manager.order_by(
+            E(order_by, nulls_first)
         ).all()
 
         for expected_item, result in zip(expected_items, results):
