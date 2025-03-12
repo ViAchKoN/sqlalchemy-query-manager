@@ -152,6 +152,59 @@ class ObjectModel(BaseModel, ModelQueryManagerMixin):
 
 This ensures that `QueryManager` works seamlessly within `Flask` applications.
 
+**Session Context managers**
+
+From the version `0.2.0` you can use `context managers` for session management, both synchronous and asynchronous. 
+This provides a cleaner way to manage sessions by automatically handling commits and rollbacks.  
+
+You can use a synchronous context manager to manage the session lifecycle:
+
+```python
+from contextlib import contextmanager
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+
+sync_db_engine = create_engine(DB_URL)
+sync_db_sessionmaker = sessionmaker(autocommit=False, autoflush=False, bind=sync_db_engine)
+
+@contextmanager
+def session_scope():
+    session = sync_db_sessionmaker()  # Create a session
+    try:
+        yield session  # Yield the session to be used in operations
+        session.commit()  # Commit if no exception occurs
+    except Exception:
+        session.rollback()  # Rollback in case of an exception
+        raise
+    finally:
+        session.close()  # Close the session after use
+```
+
+Async context manager:
+```python
+from contextlib import asynccontextmanager
+
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
+
+async_db_engine = create_async_engine(DB_URL, future=True)
+async_db_sessionmaker = sessionmaker(async_db_engine, class_=AsyncSession)
+
+@asynccontextmanager
+async def async_session_scope():
+    session = async_db_sessionmaker()  # Create an async session
+    try:
+        yield session  # Yield the session to be used in operations
+        await session.commit()  # Commit if no exception occurs
+    except Exception:
+        await session.rollback()  # Rollback in case of an exception
+        raise
+    finally:
+        await session.close()  # Close the session after use
+```
+
 #### Main operations
 
 The package provides a set of common query operations. 
