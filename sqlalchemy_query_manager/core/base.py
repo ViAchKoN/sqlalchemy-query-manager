@@ -254,9 +254,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             .first()
         )
 
-        if self.fields:
-            pass
-        elif result and expunge:
+        if result and expunge:
             session.expunge(result)
 
         return result
