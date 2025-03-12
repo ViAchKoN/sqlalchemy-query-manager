@@ -29,9 +29,13 @@ def test_sync_context_manager_session(
 
     class InjectedItem(Item, ModelQueryManagerMixin):
         class QueryManagerConfig:
-            session = session_scope()
+            session = session_scope
 
     item = models_factory.ItemFactory.create()
+
+    returned_obj = InjectedItem.query_manager.get(id=item.id)
+
+    assert returned_obj.id == item.id
 
     returned_obj = InjectedItem.query_manager.get(id=item.id)
 
@@ -57,9 +61,13 @@ async def test_async_context_manager_session(
 
     class InjectedItem(Item, AsyncModelQueryManagerMixin):
         class QueryManagerConfig:
-            session = async_session_scope()
+            session = async_session_scope
 
     item = models_factory.ItemFactory.create()
+
+    returned_obj = await InjectedItem.query_manager.get(id=item.id)
+
+    assert returned_obj.id == item.id
 
     returned_obj = await InjectedItem.query_manager.get(id=item.id)
 

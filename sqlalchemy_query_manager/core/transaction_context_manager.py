@@ -1,11 +1,26 @@
+from contextlib import _AsyncGeneratorContextManager, _GeneratorContextManager
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
 
 
-def is_context_manager(obj):
-    return callable(getattr(obj, "__enter__", None)) and callable(
-        getattr(obj, "__exit__", None)
-    )
+def is_generator_context_manager(obj):
+    """
+    Helper function to check if the object is a generator-based context manager
+    (created by @contextmanager).
+    """
+    # Ensure the object is callable, and if called, returns a generator.
+    if callable(obj):
+        try:
+            # Check if calling it returns a generator (context manager)
+            result = obj()
+            if isinstance(result, _GeneratorContextManager) or isinstance(
+                result, _AsyncGeneratorContextManager
+            ):
+                return True
+        except Exception:
+            pass
+    return False
 
 
 def is_async_context_manager(obj):
@@ -31,8 +46,8 @@ class TransactionSessionContextManager(BaseSessionContextManager):
             self._to_exit = True
         elif isinstance(self.session, Session):
             self.resource = self.session
-        elif is_context_manager(self.session):
-            self._ctx = self.session
+        elif is_generator_context_manager(self.session):
+            self._ctx = self.session()
             self.resource = self._ctx.__enter__()
             self._to_exit = True
         else:
@@ -54,8 +69,8 @@ class AsyncTransactionSessionContextManager(BaseSessionContextManager):
             self._to_exit = True
         elif isinstance(self.session, AsyncSession):
             self.resource = self.session
-        elif is_async_context_manager(self.session):
-            self._ctx = self.session
+        elif is_generator_context_manager(self.session):
+            self._ctx = self.session()
             self.resource = await self._ctx.__aenter__()
             self._to_exit = True
         else:

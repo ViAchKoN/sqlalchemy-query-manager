@@ -165,6 +165,10 @@ from contextlib import contextmanager
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from sqlalchemy_query_manager.core.base import ModelQueryManagerMixin
+from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy_query_manager.core.base import ModelQueryManagerMixin
+
 
 sync_db_engine = create_engine(DB_URL)
 sync_db_sessionmaker = sessionmaker(autocommit=False, autoflush=False, bind=sync_db_engine)
@@ -180,6 +184,15 @@ def session_scope():
         raise
     finally:
         session.close()  # Close the session after use
+        
+        
+class BaseModel(DeclarativeBase):
+    ...
+
+        
+class ObjectModel(BaseModel, ModelQueryManagerMixin):
+    class QueryManagerConfig:
+        session = session_scope
 ```
 
 Async context manager:
@@ -187,7 +200,9 @@ Async context manager:
 from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy_query_manager.core.base import ModelQueryManagerMixin
+
 
 async_db_engine = create_async_engine(DB_URL, future=True)
 async_db_sessionmaker = sessionmaker(async_db_engine, class_=AsyncSession)
@@ -203,6 +218,14 @@ async def async_session_scope():
         raise
     finally:
         await session.close()  # Close the session after use
+        
+class BaseModel(DeclarativeBase):
+    ...
+
+
+class ObjectModel(BaseModel, ModelQueryManagerMixin):
+    class QueryManagerConfig:
+        session = async_session_scope
 ```
 
 #### Main operations
