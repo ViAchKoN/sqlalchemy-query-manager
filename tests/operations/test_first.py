@@ -52,6 +52,27 @@ def test_where_object_only__as_str__ok(
     assert returned_obj_record.id == 1
 
 
+def test_where_object_only__star__ok(
+    db_session,
+    item_sql_query_manager,
+):
+    item = models_factory.ItemFactory.create(name=None)
+
+    models_factory.ItemFactory.create()
+
+    returned_obj_record = (
+        item_sql_query_manager.query_manager.where(id=item.id).only("*").first()
+    )
+
+    assert isinstance(returned_obj_record, Row)
+
+    assert returned_obj_record.id == item.id
+    assert returned_obj_record.created_at == item.created_at
+    assert returned_obj_record.number == item.number
+    assert returned_obj_record.is_valid == item.is_valid
+    assert returned_obj_record.has_name is False
+
+
 @pytest.mark.asyncio
 async def test_async_where_object_first__ok(
     db_session,
@@ -89,7 +110,7 @@ async def test_async_where_object_only__ok(
 
 
 @pytest.mark.asyncio
-async def test_async_where_object_only_field_as_str__ok(
+async def test_async_where_object_only__as_str__ok(
     db_session,
     async_item_sql_query_manager,
 ):
@@ -106,3 +127,27 @@ async def test_async_where_object_only_field_as_str__ok(
     assert isinstance(returned_obj_record, Row)
 
     assert returned_obj_record.id == 1
+
+
+@pytest.mark.asyncio
+async def test_async_where_object_only__star__ok(
+    db_session,
+    async_item_sql_query_manager,
+):
+    item = models_factory.ItemFactory.create(name=None)
+
+    models_factory.ItemFactory.create()
+
+    returned_obj_record = (
+        await async_item_sql_query_manager.query_manager.where(id=item.id)
+        .only("*")
+        .first()
+    )
+
+    assert isinstance(returned_obj_record, Row)
+
+    assert returned_obj_record.id == item.id
+    assert returned_obj_record.created_at == item.created_at
+    assert returned_obj_record.number == item.number
+    assert returned_obj_record.is_valid == item.is_valid
+    assert returned_obj_record.has_name is False
