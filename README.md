@@ -266,6 +266,8 @@ db_object = ObjectModel.query_manager.last()
 
 You can choose to return specific fields from your model using the `only` method. 
 This will return the fields you requested, and the results will be instances of the `Row` class.
+Starting from `0.2.0` you can use `*` to return all fields for a model, 
+the results will be the instance of the `Row` class.
 
 ```python
 db_object = ObjectModel.query_manager.only('id', 'description').first()
@@ -273,6 +275,13 @@ db_object = ObjectModel.query_manager.only('id', 'description').first()
 # access the fields
 print(db_object.id)
 print(db_object.description)
+
+db_object = ObjectModel.query_manager.only('*').first()
+
+# access the fields
+print(db_object.id)
+print(db_object.description)
+print(db_object.your_other_fields)
 ```
 
 **Apply filters to a Query**

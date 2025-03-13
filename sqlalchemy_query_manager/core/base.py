@@ -6,6 +6,7 @@ from dataclass_sqlalchemy_mixins.base.mixins import (
 )
 from sqlalchemy import func, inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import DeclarativeMeta, InstrumentedAttribute, Session, sessionmaker
 
 from sqlalchemy_query_manager.consts import classproperty
@@ -95,6 +96,17 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
     def only(self, *fields):
         _fields = []
         for field in fields:
+            if field == "*":
+                for column in self.ConverterConfig.model.__table__.columns:
+                    _fields.append(column)
+                hybrids = [
+                    getattr(self.ConverterConfig.model, name)
+                    for name, attr in vars(self.ConverterConfig.model).items()
+                    if isinstance(attr, hybrid_property)
+                ]
+                _fields.extend(hybrids)
+                continue
+
             if isinstance(field, InstrumentedAttribute):
                 pass
             elif isinstance(field, str):

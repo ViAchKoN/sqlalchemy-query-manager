@@ -3,6 +3,7 @@ import typing as tp
 
 import sqlalchemy as sa
 from sqlalchemy import Sequence
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import as_declarative, relationship
 
 
@@ -100,3 +101,11 @@ class Item(BaseModel):
     )
 
     group = relationship(Group)
+
+    @hybrid_property
+    def has_name(self):  # type: ignore
+        return True if self.name else False
+
+    @has_name.expression  # type: ignore
+    def has_name(cls):
+        return cls.name.isnot(None)
