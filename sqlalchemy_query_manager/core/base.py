@@ -4,7 +4,7 @@ from dataclass_sqlalchemy_mixins.base.mixins import (
     SqlAlchemyFilterConverterMixin,
     SqlAlchemyOrderConverterMixin,
 )
-from sqlalchemy import func, inspect, select
+from sqlalchemy import delete, func, inspect, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import DeclarativeMeta, InstrumentedAttribute, Session, sessionmaker
@@ -295,19 +295,315 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         self.session = session
         return self
 
+    # ENHANCED CREATE METHODS
     @get_session
     def create(self, session=None, expunge=True, **kwargs):
+        """
+        Create a new instance of the model with the provided kwargs.
+
+        Args:
+            session: Database session (optional, will use self.session if not provided)
+            expunge: Whether to expunge the object from session after creation
+            **kwargs: Field values for the new instance
+
+        Returns:
+            The created model instance
+
+        Raises:
+            ValueError: If required fields are missing
+            IntegrityError: If database constraints are violated
+        """
         new_obj = self.ConverterConfig.model(**kwargs)
         session.add(new_obj)
+
         if self._to_commit:
             session.commit()
         else:
             session.flush()
+
         session.refresh(new_obj)
 
         if expunge:
             session.expunge(new_obj)
+
         return new_obj
+
+    @get_session
+    def bulk_create(self, data: typing.List[typing.Dict], session=None, expunge=True):
+        """
+        Create multiple instances efficiently using bulk operations.
+
+        Args:
+            session: Database session
+            data: List of dictionaries containing field values
+            expunge: Whether to expunge objects from session
+
+        Returns:
+            List of created instances
+        """
+        if not data:
+            return []
+
+        objects = [self.ConverterConfig.model(**item) for item in data]
+        session.add_all(objects)
+
+        if self._to_commit:
+            session.commit()
+        else:
+            session.flush()
+
+        # Refresh all objects to get their IDs and computed fields
+        for obj in objects:
+            session.refresh(obj)
+
+        if expunge:
+            for obj in objects:
+                session.expunge(obj)
+
+        return objects
+
+    @get_session
+    def get_or_create(self, session=None, expunge=True, defaults=None, **kwargs):
+        """
+        Get an existing instance or create a new one if it doesn't exist.
+
+        Args:
+            session: Database session
+            expunge: Whether to expunge the object from session
+            defaults: Default values to use when creating (if needed)
+            **kwargs: Filter criteria for finding existing instance
+
+        Returns:
+            Tuple of (instance, created) where created is True if instance was created
+        """
+        # Try to get existing instance
+        existing = self.get(session=session, expunge=False, **kwargs)
+
+        if existing:
+            if expunge:
+                session.expunge(existing)
+            return existing, False
+
+        # Create new instance with defaults
+        create_kwargs = kwargs.copy()
+        if defaults:
+            create_kwargs.update(defaults)
+
+        new_obj = self.create(session=session, expunge=expunge, **create_kwargs)
+        return new_obj, True
+
+    @get_session
+    def update(self, session=None, expunge=True, **kwargs):
+        """
+        Update records matching the current filters and return updated objects.
+
+        Args:
+            session: Database session
+            expunge: Whether to expunge the objects from session after update
+            **kwargs: Field values to update
+
+        Returns:
+            List of updated model instances
+
+        Raises:
+            ValueError: If no filters are set (to prevent accidental full table updates)
+        """
+        if not self.filters:
+            raise ValueError(
+                "Cannot update without filters. Use where() to specify criteria."
+            )
+
+        # Build update query with current filters
+        update_query = update(self.ConverterConfig.model)
+
+        if self.binary_expressions:
+            update_query = update_query.where(*self.binary_expressions)
+
+        update_query = update_query.values(**kwargs)
+
+        update_query_no_returning = update_query.values(**kwargs)
+
+        session.execute(update_query_no_returning)
+
+        if self._to_commit:
+            session.commit()
+        else:
+            session.flush()
+
+        # Then fetch the updated objects
+        updated_objects = self.all(session=session)
+        return updated_objects if len(updated_objects) > 1 else updated_objects[0]
+
+    @get_session
+    def update_or_create(self, session=None, expunge=True, defaults=None, **kwargs):
+        """
+        Update an existing instance or create a new one if it doesn't exist.
+
+        Args:
+            session: Database session
+            expunge: Whether to expunge the object from session
+            defaults: Default values to use when creating or updating
+            **kwargs: Filter criteria for finding existing instance
+
+        Returns:
+            Tuple of (instance, created) where created is True if instance was created
+        """
+        # Try to get existing instance
+        existing = self.get(session=session, expunge=False, **kwargs)
+
+        if existing:
+            # Update existing instance
+            if defaults:
+                for key, value in defaults.items():
+                    if hasattr(existing, key):
+                        setattr(existing, key, value)
+
+            if self._to_commit:
+                session.commit()
+            else:
+                session.flush()
+                session.refresh(existing)
+
+            if expunge:
+                session.expunge(existing)
+
+            return existing, False
+
+        # Create new instance
+        create_kwargs = kwargs.copy()
+        if defaults:
+            create_kwargs.update(defaults)
+
+        new_obj = self.create(session=session, expunge=expunge, **create_kwargs)
+        return new_obj, True
+
+    @get_session
+    def bulk_update(
+        self,
+        data: typing.List[typing.Dict],
+        session=None,
+        key_fields: typing.List[str] = None,
+        expunge=True,
+    ):
+        """
+        Update multiple records efficiently and return updated objects.
+
+        Args:
+            session: Database session
+            data: List of dictionaries containing field values and identifiers
+            key_fields: Fields to use for matching existing records (defaults to primary key)
+            expunge: Whether to expunge the objects from session after update
+
+        Returns:
+            List of updated model instances
+        """
+        if not data:
+            return []
+
+        if key_fields is None:
+            # Use primary key as default
+            primary_keys = [
+                pk.name for pk in inspect(self.ConverterConfig.model).primary_key
+            ]
+            key_fields = primary_keys
+
+        updated_objects = []
+
+        for item in data:
+            # Extract key fields for filtering
+            filter_kwargs = {key: item[key] for key in key_fields if key in item}
+            update_kwargs = {k: v for k, v in item.items() if k not in key_fields}
+
+            if update_kwargs and filter_kwargs:
+                # Create a new query manager instance for each update
+                query_manager = self.__class__(self.ConverterConfig.model, session)
+                query_manager.where(**filter_kwargs)
+                updated_objs = query_manager.update(
+                    session=session, expunge=False, **update_kwargs
+                )
+                updated_objects.extend(updated_objs)
+
+        if expunge:
+            for obj in updated_objects:
+                session.expunge(obj)
+
+        return updated_objects
+
+    @get_session
+    def delete(self, session=None):
+        """
+        Delete records matching the current filters.
+
+        Args:
+            session: Database session
+
+        Returns:
+            Number of deleted rows
+
+        Raises:
+            ValueError: If no filters are set (to prevent accidental full table deletions)
+        """
+        if not self.filters:
+            raise ValueError(
+                "Cannot delete without filters. Use where() to specify criteria."
+            )
+
+        # Build delete query with current filters
+        delete_query = delete(self.ConverterConfig.model)
+
+        if self.binary_expressions:
+            delete_query = delete_query.where(*self.binary_expressions)
+
+        result = session.execute(delete_query)
+
+        if self._to_commit:
+            session.commit()
+        else:
+            session.flush()
+
+        return result.rowcount
+
+    @get_session
+    def exists(self, session=None, **kwargs):
+        """
+        Check if any records exist matching the criteria.
+
+        Args:
+            session: Database session
+            **kwargs: Additional filter criteria
+
+        Returns:
+            Boolean indicating if records exist
+        """
+        if kwargs:
+            # Create new query manager with additional filters
+            query_manager = self.__class__(self.ConverterConfig.model, session)
+            query_manager.filters = {**self.filters, **kwargs}
+            return query_manager.exists(session=session)
+
+        # Use current filters
+        query = select(self.ConverterConfig.model).where(*self.binary_expressions)
+        exists_query = select(query.exists())
+
+        return session.execute(exists_query).scalar()
+
+    def clone(self):
+        """
+        Create a copy of the current QueryManager with the same filters and settings.
+
+        Returns:
+            New QueryManager instance
+        """
+        new_manager = self.__class__(self.ConverterConfig.model, self.session)
+        new_manager.filters = self.filters.copy()
+        new_manager._order_by = self._order_by.copy()
+        new_manager._limit = self._limit
+        new_manager._offset = self._offset
+
+        if self.fields:
+            new_manager.fields = self.fields.copy()
+
+        return new_manager
 
 
 class AsyncQueryManager(QueryManager):
@@ -366,14 +662,210 @@ class AsyncQueryManager(QueryManager):
 
     @get_async_session
     async def create(self, session=None, **kwargs):
+        """Async version of create method."""
         new_obj = self.ConverterConfig.model(**kwargs)
         session.add(new_obj)
+
         if isinstance(self.session, sessionmaker):
             await session.commit()
         else:
             await session.flush()
+
         await session.refresh(new_obj)
         return new_obj
+
+    @get_async_session
+    async def bulk_create(
+        self,
+        data: typing.List[typing.Dict],
+        session=None,
+    ):
+        """Async version of bulk_create method."""
+        if not data:
+            return []
+
+        objects = [self.ConverterConfig.model(**item) for item in data]
+        session.add_all(objects)
+
+        if isinstance(self.session, sessionmaker):
+            await session.commit()
+        else:
+            await session.flush()
+
+        for obj in objects:
+            await session.refresh(obj)
+
+        return objects
+
+    @get_async_session
+    async def get_or_create(self, session=None, defaults=None, **kwargs):
+        """Async version of get_or_create method."""
+        existing = await self.get(session=session, **kwargs)
+
+        if existing:
+            return existing, False
+
+        create_kwargs = kwargs.copy()
+        if defaults:
+            create_kwargs.update(defaults)
+
+        new_obj = await self.create(session=session, **create_kwargs)
+        return new_obj, True
+
+    @get_async_session
+    async def update(self, session=None, expunge=True, **kwargs):
+        """Async version of update method that returns updated objects."""
+        if not self.filters:
+            raise ValueError(
+                "Cannot update without filters. Use where() to specify criteria."
+            )
+
+        # Build update query with current filters
+        update_query = update(self.ConverterConfig.model)
+
+        if self.binary_expressions:
+            update_query = update_query.where(*self.binary_expressions)
+
+        update_query = update_query.values(**kwargs)
+
+        await session.execute(update_query)
+
+        if isinstance(self.session, sessionmaker):
+            await session.commit()
+        else:
+            await session.flush()
+
+        # Then fetch the updated objects
+        updated_objects = await self.all(session=session)
+        return updated_objects if len(updated_objects) > 1 else updated_objects[0]
+
+    @get_async_session
+    async def update_raw(self, session=None, **kwargs):
+        """
+        Async version of update_raw method for better performance.
+
+        Args:
+            session: Database session
+            **kwargs: Field values to update
+
+        Returns:
+            Number of affected rows
+        """
+        if not self.filters:
+            raise ValueError(
+                "Cannot update without filters. Use where() to specify criteria."
+            )
+
+        update_query = update(self.ConverterConfig.model)
+
+        if self.binary_expressions:
+            update_query = update_query.where(*self.binary_expressions)
+
+        update_query = update_query.values(**kwargs)
+
+        result = await session.execute(update_query)
+
+        if isinstance(self.session, sessionmaker):
+            await session.commit()
+        else:
+            await session.flush()
+
+        return result.rowcount
+
+    @get_async_session
+    async def update_or_create(self, session=None, defaults=None, **kwargs):
+        """Async version of update_or_create method."""
+        existing = await self.get(session=session, **kwargs)
+
+        if existing:
+            if defaults:
+                for key, value in defaults.items():
+                    if hasattr(existing, key):
+                        setattr(existing, key, value)
+
+            if isinstance(self.session, sessionmaker):
+                await session.commit()
+            else:
+                await session.flush()
+                await session.refresh(existing)
+
+            return existing, False
+
+        create_kwargs = kwargs.copy()
+        if defaults:
+            create_kwargs.update(defaults)
+
+        new_obj = await self.create(session=session, **create_kwargs)
+        return new_obj, True
+
+    @get_async_session
+    async def bulk_update(
+        self,
+        data: typing.List[typing.Dict],
+        session=None,
+        key_fields: typing.List[str] = None,
+        expunge=True,
+    ):
+        """Async version of bulk_update method that returns updated objects."""
+        if not data:
+            return []
+
+        if key_fields is None:
+            primary_keys = [
+                pk.name for pk in inspect(self.ConverterConfig.model).primary_key
+            ]
+            key_fields = primary_keys
+
+        updated_objects = []
+
+        for item in data:
+            filter_kwargs = {key: item[key] for key in key_fields if key in item}
+            update_kwargs = {k: v for k, v in item.items() if k not in key_fields}
+
+            if update_kwargs and filter_kwargs:
+                query_manager = self.__class__(self.ConverterConfig.model, session)
+                query_manager.where(**filter_kwargs)
+                updated_objs = await query_manager.update(
+                    session=session, expunge=False, **update_kwargs
+                )
+                updated_objects.extend(updated_objs)
+
+        return updated_objects
+
+    @get_async_session
+    async def delete(self, session=None):
+        """Async version of delete method."""
+        if not self.filters:
+            raise ValueError(
+                "Cannot delete without filters. Use where() to specify criteria."
+            )
+
+        delete_query = delete(self.ConverterConfig.model)
+
+        if self.binary_expressions:
+            delete_query = delete_query.where(*self.binary_expressions)
+
+        result = await session.execute(delete_query)
+
+        if isinstance(self.session, sessionmaker):
+            await session.commit()
+        else:
+            await session.flush()
+
+        return result.rowcount
+
+    @get_async_session
+    async def exists(self, session=None, **kwargs):
+        """Async version of exists method."""
+        if kwargs:
+            query_manager = self.__class__(self.ConverterConfig.model, session)
+            query_manager.filters = {**self.filters, **kwargs}
+            return await query_manager.exists(session=session)
+
+        query = select(self.ConverterConfig.model).where(*self.binary_expressions)
+        exists_query = select(query.exists())
+
+        return (await session.execute(exists_query)).scalar()
 
 
 class BaseModelQueryManagerMixin:
