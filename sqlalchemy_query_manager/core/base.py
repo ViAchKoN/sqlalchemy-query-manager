@@ -529,7 +529,6 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         return updated_objects
 
-    # DELETE METHODS
     @get_session
     def delete(self, session=None):
         """
@@ -564,7 +563,6 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         return result.rowcount
 
-    # UTILITY METHODS
     @get_session
     def exists(self, session=None, **kwargs):
         """
@@ -662,7 +660,6 @@ class AsyncQueryManager(QueryManager):
         ).scalar_one()
         return count
 
-    # ASYNC CREATE METHODS
     @get_async_session
     async def create(self, session=None, **kwargs):
         """Async version of create method."""
@@ -715,7 +712,6 @@ class AsyncQueryManager(QueryManager):
         new_obj = await self.create(session=session, **create_kwargs)
         return new_obj, True
 
-    # ASYNC UPDATE METHODS
     @get_async_session
     async def update(self, session=None, expunge=True, **kwargs):
         """Async version of update method that returns updated objects."""
@@ -836,7 +832,6 @@ class AsyncQueryManager(QueryManager):
 
         return updated_objects
 
-    # ASYNC DELETE METHODS
     @get_async_session
     async def delete(self, session=None):
         """Async version of delete method."""
