@@ -234,13 +234,12 @@ The package provides a set of common query operations.
 These operations can be chained and combined to perform complex queries.
 
 
-**Create**
+**Create Operations**
 
-The `create` method of `QueryManager` allows creating a new object in the database.  
+The `create` method allows you to create new objects in the database with the provided field values.
 
-- If a **session is provided**, 
-the object will be added to that session but **won't be committed automatically** (you must commit manually).  
-- If **no session is provided**, the operation will be **automatically committed** at the end.  
+- If a **session is provided**, the object will be added to that session but **won't be committed automatically** (you must commit manually).  
+- If **no session is provided**, the operation will be **automatically committed** at the end.
 
 ```python
 # Create a new object with automatic commit
@@ -250,6 +249,77 @@ db_object = ObjectModel.query_manager.create(field1="value1", field2="value2")
 db_object = ObjectModel.query_manager.create(field1="value1", field2="value2", session=your_session)
 your_session.commit()  # Commit manually if session is provided
 ```
+
+**Async Create**
+
+For async operations, use the same syntax with `await`:
+
+```python
+# Async create with automatic commit
+db_object = await ObjectModel.query_manager.create(field1="value1", field2="value2")
+
+# Async create within an existing session
+db_object = await ObjectModel.query_manager.create(field1="value1", field2="value2", session=your_session)
+await your_session.commit()  # Commit manually if session is provided
+```
+
+**Update Operations**
+
+The `update` method allows you to update existing records that match the current filters and returns the updated objects.
+
+**⚠️ Important**: You must use `where()` to set filters before calling `update()` to prevent accidental full table updates.
+
+```python
+# Update records matching specific criteria
+updated_objects = ObjectModel.query_manager.where(status="active").update(
+    last_updated=datetime.now(),
+    processed=True
+)
+
+# Update a single record by ID
+updated_object = ObjectModel.query_manager.where(id=1).update(name="New Name")
+
+# Chain multiple filters before updating
+updated_objects = ObjectModel.query_manager.where(
+    category="electronics"
+).where(
+    price__lt=100
+).update(discount=0.1)
+```
+
+**Async Update**
+
+For async operations, use the same syntax with `await`:
+
+```python
+# Async update with filters
+updated_objects = await ObjectModel.query_manager.where(status="pending").update(
+    status="completed",
+    completed_at=datetime.now()
+)
+
+# Async update with session management
+updated_object = await ObjectModel.query_manager.where(id=1).update(
+    name="Updated Name",
+    session=your_session
+)
+await your_session.commit()  # Commit manually if session is provided
+```
+
+**Setting a Session for Create/Update Operations**
+
+You can provide a session directly to these methods using the `session` parameter:
+
+```python
+# Sync operations with session
+db_object = ObjectModel.query_manager.create(name="Test", session=your_session)
+updated_object = ObjectModel.query_manager.where(id=1).update(name="Updated", session=your_session)
+
+# Async operations with session  
+db_object = await ObjectModel.query_manager.create(name="Test", session=your_session)
+updated_object = await ObjectModel.query_manager.where(id=1).update(name="Updated", session=your_session)
+```
+
 
 **Get First Value**
 
