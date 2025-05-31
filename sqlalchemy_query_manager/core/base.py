@@ -737,7 +737,7 @@ class AsyncQueryManager(QueryManager):
 
         # Then fetch the updated objects
         updated_objects = await self.all(session=session)
-        return updated_objects if len(updated_objects) > 0 else updated_objects
+        return updated_objects if len(updated_objects) > 1 else updated_objects[0]
 
     @get_async_session
     async def update_raw(self, session=None, **kwargs):
