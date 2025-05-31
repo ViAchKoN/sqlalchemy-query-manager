@@ -392,7 +392,6 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         new_obj = self.create(session=session, expunge=expunge, **create_kwargs)
         return new_obj, True
 
-    # UPDATE METHODS
     @get_session
     def update(self, session=None, expunge=True, **kwargs):
         """
@@ -422,82 +421,18 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         update_query = update_query.values(**kwargs)
 
-        # Try to use RETURNING clause for databases that support it (PostgreSQL, SQLite 3.35+)
-        try:
-            # Add RETURNING clause to get updated records
-            update_query = update_query.returning(self.ConverterConfig.model)
-            result = session.execute(update_query)
-            updated_objects = result.scalars().all()
+        update_query_no_returning = update_query.values(**kwargs)
 
-            if self._to_commit:
-                session.commit()
-            else:
-                session.flush()
-
-            if expunge:
-                for obj in updated_objects:
-                    session.expunge(obj)
-
-            return updated_objects
-
-        except Exception:
-            # Fallback for databases that don't support RETURNING with UPDATE
-            # First execute the update
-            update_query_no_returning = update(self.ConverterConfig.model)
-            if self.binary_expressions:
-                update_query_no_returning = update_query_no_returning.where(
-                    *self.binary_expressions
-                )
-            update_query_no_returning = update_query_no_returning.values(**kwargs)
-
-            session.execute(update_query_no_returning)
-
-            if self._to_commit:
-                session.commit()
-            else:
-                session.flush()
-
-            # Then fetch the updated objects
-            updated_objects = self.all(session=session, expunge=expunge)
-            return updated_objects
-
-    @get_session
-    def update_raw(self, session=None, **kwargs):
-        """
-        Update records using raw SQL for better performance, returns count.
-        Use this when you don't need the updated objects back.
-
-        Args:
-            session: Database session
-            **kwargs: Field values to update
-
-        Returns:
-            Number of affected rows
-
-        Raises:
-            ValueError: If no filters are set (to prevent accidental full table updates)
-        """
-        if not self.filters:
-            raise ValueError(
-                "Cannot update without filters. Use where() to specify criteria."
-            )
-
-        # Build update query with current filters
-        update_query = update(self.ConverterConfig.model)
-
-        if self.binary_expressions:
-            update_query = update_query.where(*self.binary_expressions)
-
-        update_query = update_query.values(**kwargs)
-
-        result = session.execute(update_query)
+        session.execute(update_query_no_returning)
 
         if self._to_commit:
             session.commit()
         else:
             session.flush()
 
-        return result.rowcount
+        # Then fetch the updated objects
+        updated_objects = self.all(session=session)
+        return updated_objects if len(updated_objects) > 1 else updated_objects[0]
 
     @get_session
     def update_or_create(self, session=None, expunge=True, defaults=None, **kwargs):
@@ -629,6 +564,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         return result.rowcount
 
+    # UTILITY METHODS
     @get_session
     def exists(self, session=None, **kwargs):
         """
@@ -742,7 +678,11 @@ class AsyncQueryManager(QueryManager):
         return new_obj
 
     @get_async_session
-    async def bulk_create(self, data: typing.List[typing.Dict], session=None):
+    async def bulk_create(
+        self,
+        data: typing.List[typing.Dict],
+        session=None,
+    ):
         """Async version of bulk_create method."""
         if not data:
             return []
@@ -792,41 +732,16 @@ class AsyncQueryManager(QueryManager):
 
         update_query = update_query.values(**kwargs)
 
-        # Try to use RETURNING clause for databases that support it
-        try:
-            # Add RETURNING clause to get updated records
-            update_query = update_query.returning(self.ConverterConfig.model)
-            result = await session.execute(update_query)
-            updated_objects = result.scalars().all()
+        await session.execute(update_query)
 
-            if isinstance(self.session, sessionmaker):
-                await session.commit()
-            else:
-                await session.flush()
+        if isinstance(self.session, sessionmaker):
+            await session.commit()
+        else:
+            await session.flush()
 
-            # Note: For async, we typically don't expunge as the session will be closed
-            return updated_objects
-
-        except Exception:
-            # Fallback for databases that don't support RETURNING with UPDATE
-            # First execute the update
-            update_query_no_returning = update(self.ConverterConfig.model)
-            if self.binary_expressions:
-                update_query_no_returning = update_query_no_returning.where(
-                    *self.binary_expressions
-                )
-            update_query_no_returning = update_query_no_returning.values(**kwargs)
-
-            await session.execute(update_query_no_returning)
-
-            if isinstance(self.session, sessionmaker):
-                await session.commit()
-            else:
-                await session.flush()
-
-            # Then fetch the updated objects
-            updated_objects = await self.all(session=session)
-            return updated_objects
+        # Then fetch the updated objects
+        updated_objects = await self.all(session=session)
+        return updated_objects if len(updated_objects) > 0 else updated_objects
 
     @get_async_session
     async def update_raw(self, session=None, **kwargs):
