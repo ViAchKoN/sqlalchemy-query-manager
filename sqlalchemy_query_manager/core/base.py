@@ -454,6 +454,10 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         Raises:
             ValueError: If no filters are set (to prevent accidental full table updates)
         """
+
+        # Remove expunge parameter injected by decorator since we don't use it
+        kwargs.pop("expunge", None)
+
         if not self.filters:
             raise ValueError(
                 "Cannot update without filters. Use where() to specify criteria."
@@ -793,6 +797,9 @@ class AsyncQueryManager(QueryManager):
         Returns:
             Number of affected rows
         """
+        # Remove expunge parameter injected by decorator since we don't use it
+        kwargs.pop("expunge", None)
+
         if not self.filters:
             raise ValueError(
                 "Cannot update without filters. Use where() to specify criteria."
