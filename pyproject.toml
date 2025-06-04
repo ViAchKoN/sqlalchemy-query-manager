@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sqlalchemy-query-manager"
-version = "0.3.2"
+version = "0.3.3"
 description = ""
 authors = ["ViAchKoN"]
 readme = "README.md"
