@@ -437,6 +437,46 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         return updated_objects if len(updated_objects) > 1 else updated_objects[0]
 
     @get_session
+    def update_raw(self, session=None, **kwargs):
+        """
+        Update records matching the current filters without returning objects.
+
+        This method provides better performance than update() when you don't need
+        the updated objects returned, as it avoids the additional query to fetch them.
+
+        Args:
+            session: Database session (optional, will use self.session if not provided)
+            **kwargs: Field values to update
+
+        Returns:
+            Number of affected rows
+
+        Raises:
+            ValueError: If no filters are set (to prevent accidental full table updates)
+        """
+        if not self.filters:
+            raise ValueError(
+                "Cannot update without filters. Use where() to specify criteria."
+            )
+
+        # Build update query with current filters
+        update_query = update(self.ConverterConfig.model)
+
+        if self.binary_expressions:
+            update_query = update_query.where(*self.binary_expressions)
+
+        update_query = update_query.values(**kwargs)
+
+        result = session.execute(update_query)
+
+        if self._to_commit:
+            session.commit()
+        else:
+            session.flush()
+
+        return result.rowcount
+
+    @get_session
     def update_or_create(self, session=None, expunge=True, defaults=None, **kwargs):
         """
         Update an existing instance or create a new one if it doesn't exist.
