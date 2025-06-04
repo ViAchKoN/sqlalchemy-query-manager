@@ -35,6 +35,9 @@ class BaseSessionContextManager:
         session,
     ) -> None:  # type: ignore
         self.session = session
+        # if a session is passed, and we need already existing one
+        self.is_session_already_set = False
+
         self._to_exit = False
         self._ctx = None  # if a session passed as a context manager
 
@@ -46,6 +49,7 @@ class TransactionSessionContextManager(BaseSessionContextManager):
             self._to_exit = True
         elif isinstance(self.session, Session):
             self.resource = self.session
+            self.is_session_already_set = True
         elif is_generator_context_manager(self.session):
             self._ctx = self.session()
             self.resource = self._ctx.__enter__()
@@ -69,6 +73,7 @@ class AsyncTransactionSessionContextManager(BaseSessionContextManager):
             self._to_exit = True
         elif isinstance(self.session, AsyncSession):
             self.resource = self.session
+            self.is_session_already_set = True
         elif is_generator_context_manager(self.session):
             self._ctx = self.session()
             self.resource = await self._ctx.__aenter__()

@@ -11,11 +11,13 @@ def get_session(func):
 
     @wraps(func)
     def wrapper(self, *args, session=None, **kwargs):
-        with TransactionSessionContextManager(
+        ctx_manager = TransactionSessionContextManager(
             session=session or self.session,
-        ) as managed_session:
+        )
+
+        with ctx_manager as managed_session:
             expunge = True
-            if session:
+            if session or ctx_manager.is_session_already_set:
                 expunge = False
 
             return func(self, session=managed_session, expunge=expunge, *args, **kwargs)
@@ -29,7 +31,7 @@ def get_async_session(func):
     @wraps(func)
     async def wrapper(self, *args, session=None, **kwargs):
         async with AsyncTransactionSessionContextManager(
-            session=session or self.session,
+            session=session or self.session
         ) as managed_session:
             return await func(self, session=managed_session, *args, **kwargs)
 
