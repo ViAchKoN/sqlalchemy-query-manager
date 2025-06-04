@@ -295,7 +295,6 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         self.session = session
         return self
 
-    # ENHANCED CREATE METHODS
     @get_session
     def create(self, session=None, expunge=True, **kwargs):
         """
@@ -432,6 +431,9 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         # Then fetch the updated objects
         updated_objects = self.all(session=session)
+
+        if expunge:
+            session.expunge_all()
         return updated_objects if len(updated_objects) > 1 else updated_objects[0]
 
     @get_session
