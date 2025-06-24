@@ -1,3 +1,5 @@
+import dataclasses
+import enum
 import typing
 
 from dataclass_sqlalchemy_mixins.base.mixins import (
@@ -12,6 +14,22 @@ from sqlalchemy.orm import DeclarativeMeta, InstrumentedAttribute, Session, sess
 from sqlalchemy_query_manager.consts import classproperty
 from sqlalchemy_query_manager.core.helpers import E
 from sqlalchemy_query_manager.core.utils import get_async_session, get_session
+
+
+class JoinType(enum.Enum):
+    """Enumeration of supported join types"""
+
+    INNER = "inner"
+    LEFT = "left"
+    RIGHT = "right"
+    FULL = "full"
+    OUTER = "outer"  # Alias for LEFT
+
+
+@dataclasses.dataclass
+class JoinConfig:
+    model: DeclarativeMeta
+    join_type: JoinType = JoinType.INNER
 
 
 class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin):
@@ -31,6 +49,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         self._order_by = set()
 
         self.models_to_join = []
+        self.explicit_joins: typing.List[JoinConfig] = []
 
         self._limit = None
         self._offset = None
@@ -62,7 +81,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
     def join_models(
         self,
         query,
-        models: typing.List[DeclarativeMeta],
+        join_configs: typing.List[JoinConfig],
     ):
         query = query
 
@@ -82,11 +101,46 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
                 if joined_models:
                     break
 
-        for model in models:
+        for join_config in join_configs:
+            model = join_config.model
             if model != self.ConverterConfig.model and model not in joined_models:
                 query = query.join(model)
 
         return query
+
+    def inner_join(self, *relationships):
+        """
+        Specify relationships to be joined using INNER JOIN.
+
+        Args:
+            *relationships: Relationship paths like 'group', 'group__owner'
+
+        Returns:
+            QueryManager: New instance with join specifications
+
+        Usage:
+            Item.query_manager.inner_join('group').all()
+            Item.query_manager.inner_join('group', 'group__owner').all()
+            Item.query_manager.inner_join('group__owner').where(name='test').all()
+        """
+        new_manager = self._clone()
+
+        for relationship in relationships:
+            self.get_foreign_key_filtered_column(
+                relationship,
+                to_return_column=False,
+            )
+
+            new_manager.explicit_joins.append(
+                JoinConfig(
+                    **{
+                        "model_to_join": relationship,
+                        "join_type": JoinType.INNER,
+                    }
+                )
+            )
+
+        return new_manager
 
     def get_model_field(
         self,
@@ -163,7 +217,8 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             )
 
             for model_binary_expression in models_binary_expressions:
-                self.models_to_join.extend(model_binary_expression.get("models"))
+                for model in model_binary_expression.get("models"):
+                    self.models_to_join.append(JoinConfig(model=model))
                 self._binary_expressions.append(
                     model_binary_expression.get("binary_expression")
                 )
@@ -188,8 +243,8 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             )
 
             for pos, model_unary_expression in enumerate(models_unary_expressions):
-                self.models_to_join.extend(model_unary_expression.get("models"))
-
+                for model in model_unary_expression.get("models"):
+                    self.models_to_join.append(JoinConfig(model=model))
                 unary_expression = model_unary_expression.get("unary_expression")
 
                 if pos in e_pos:
@@ -207,13 +262,17 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         if self.fields:
             query = select(*self.fields)
 
+        # Apply explicit joins
+        if self.explicit_joins:
+            pass
+
         if self.binary_expressions:
             if self.models_to_join != [
                 self.ConverterConfig.model,
             ]:
                 query = self.join_models(
                     query=query,
-                    models=self.models_to_join,
+                    join_configs=self.models_to_join,
                 )
             query = query.where(*self.binary_expressions)
 
@@ -221,7 +280,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             if self.models_to_join != [
                 self.ConverterConfig.model,
             ]:
-                query = self.join_models(query=query, models=self.models_to_join)
+                query = self.join_models(query=query, join_configs=self.models_to_join)
             query = query.order_by(*self.unary_expressions)
 
         if self._offset:
