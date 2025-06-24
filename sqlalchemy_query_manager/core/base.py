@@ -38,6 +38,27 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         self._binary_expressions = []
         self._unary_expressions = []
 
+    def _clone(self):
+        """Create a copy of the current QueryManager"""
+        new_manager = self.__class__(
+            model=self.ConverterConfig.model, session=self.session
+        )
+
+        # Copy all mutable state
+        new_manager.filters = self.filters.copy()
+        new_manager._order_by = self._order_by.copy()
+        new_manager._limit = self._limit
+        new_manager._offset = self._offset
+        new_manager.fields = self.fields.copy() if self.fields else None
+        new_manager.models_to_join = self.models_to_join.copy()
+        new_manager._to_commit = self._to_commit
+
+        # Copy internal state
+        new_manager._binary_expressions = self._binary_expressions.copy()
+        new_manager._unary_expressions = self._unary_expressions.copy()
+
+        return new_manager
+
     def join_models(
         self,
         query,
@@ -94,6 +115,8 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         return db_field
 
     def only(self, *fields):
+        query_manager = self._clone()
+
         _fields = []
         for field in fields:
             if field == "*":
@@ -117,16 +140,20 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
                 )
             _fields.append(field)
 
-        self.fields = _fields
-        return self
+        query_manager.fields = _fields
+        return query_manager
 
     def limit(self, limit):
-        self._limit = limit
-        return self
+        query_manager = self._clone()
+
+        query_manager._limit = limit
+        return query_manager
 
     def offset(self, offset):
-        self._offset = offset
-        return self
+        query_manager = self._clone()
+
+        query_manager._offset = offset
+        return query_manager
 
     @property
     def binary_expressions(self):
@@ -272,17 +299,21 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         return result
 
     def where(self, **kwargs):
-        self.filters = {
+        query_manager = self._clone()
+
+        query_manager.filters = {
             **self.filters,
             **kwargs,
         }
 
-        return self
+        return query_manager
 
     def order_by(self, *args):
-        self._order_by.update(set(args))
+        query_manager = self._clone()
 
-        return self
+        query_manager._order_by.update(set(args))
+
+        return query_manager
 
     @get_session
     def count(self, session=None, **kwargs):
@@ -292,8 +323,10 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         return count
 
     def with_session(self, session):
-        self.session = session
-        return self
+        query_manager = self._clone()
+
+        query_manager.session = session
+        return query_manager
 
     @get_session
     def create(self, session=None, expunge=True, **kwargs):
