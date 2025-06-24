@@ -70,6 +70,8 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         new_manager._offset = self._offset
         new_manager.fields = self.fields.copy() if self.fields else None
         new_manager.models_to_join = self.models_to_join.copy()
+        new_manager.explicit_joins = self.explicit_joins
+
         new_manager._to_commit = self._to_commit
 
         # Copy internal state
@@ -126,19 +128,19 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         new_manager = self._clone()
 
         for relationship in relationships:
-            self.get_foreign_key_filtered_column(
+            relationship = relationship.split("__")
+            models, _ = self.get_foreign_key_filtered_column(
                 relationship,
                 to_return_column=False,
             )
 
-            new_manager.explicit_joins.append(
-                JoinConfig(
-                    **{
-                        "model_to_join": relationship,
-                        "join_type": JoinType.INNER,
-                    }
+            for model in models:
+                new_manager.explicit_joins.append(
+                    JoinConfig(
+                        model=model,
+                        join_type=JoinType.INNER,
+                    )
                 )
-            )
 
         return new_manager
 
@@ -174,14 +176,21 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         _fields = []
         for field in fields:
             if field == "*":
-                for column in self.ConverterConfig.model.__table__.columns:
-                    _fields.append(column)
-                hybrids = [
-                    getattr(self.ConverterConfig.model, name)
-                    for name, attr in vars(self.ConverterConfig.model).items()
-                    if isinstance(attr, hybrid_property)
-                ]
-                _fields.extend(hybrids)
+                models = [self.ConverterConfig.model]
+
+                if query_manager.explicit_joins:
+                    for explicit_join in query_manager.explicit_joins:
+                        models.append(explicit_join.model)
+
+                for model in models:
+                    for column in model.__table__.columns:
+                        _fields.append(column)
+                    hybrids = [
+                        getattr(model, name)
+                        for name, attr in vars(model).items()
+                        if isinstance(attr, hybrid_property)
+                    ]
+                    _fields.extend(hybrids)
                 continue
 
             if isinstance(field, InstrumentedAttribute):
@@ -264,12 +273,14 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         # Apply explicit joins
         if self.explicit_joins:
-            pass
+            if self.explicit_joins != [JoinConfig(model=self.ConverterConfig.model)]:
+                query = self.join_models(
+                    query=query,
+                    join_configs=self.explicit_joins,
+                )
 
         if self.binary_expressions:
-            if self.models_to_join != [
-                self.ConverterConfig.model,
-            ]:
+            if self.models_to_join != [JoinConfig(model=self.ConverterConfig.model)]:
                 query = self.join_models(
                     query=query,
                     join_configs=self.models_to_join,
