@@ -107,6 +107,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             model = join_config.model
             if model != self.ConverterConfig.model and model not in joined_models:
                 query = query.join(model)
+                joined_models.append(model)
 
         return query
 
@@ -268,31 +269,29 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
     def query(self):
         query = select(self.ConverterConfig.model)
 
-        if self.fields:
-            query = select(*self.fields)
-
         # Apply explicit joins
         if self.explicit_joins:
-            if self.explicit_joins != [JoinConfig(model=self.ConverterConfig.model)]:
-                query = self.join_models(
-                    query=query,
-                    join_configs=self.explicit_joins,
-                )
+            query = self.join_models(
+                query=query,
+                join_configs=self.explicit_joins,
+            )
 
+        # Apply binary expressions
         if self.binary_expressions:
-            if self.models_to_join != [JoinConfig(model=self.ConverterConfig.model)]:
-                query = self.join_models(
-                    query=query,
-                    join_configs=self.models_to_join,
-                )
+            query = self.join_models(
+                query=query,
+                join_configs=self.models_to_join,
+            )
             query = query.where(*self.binary_expressions)
 
+        # Apply unary expressions
         if self.unary_expressions:
-            if self.models_to_join != [
-                self.ConverterConfig.model,
-            ]:
-                query = self.join_models(query=query, join_configs=self.models_to_join)
+            query = self.join_models(query=query, join_configs=self.models_to_join)
             query = query.order_by(*self.unary_expressions)
+
+        # Select fields
+        if self.fields:
+            query = query.with_only_columns(*self.fields)
 
         if self._offset:
             query = query.offset(self._offset)
