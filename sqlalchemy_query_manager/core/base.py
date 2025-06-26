@@ -21,9 +21,7 @@ class JoinType(enum.Enum):
 
     INNER = "inner"
     LEFT = "left"
-    RIGHT = "right"
     FULL = "full"
-    OUTER = "outer"  # Alias for LEFT
 
 
 @dataclasses.dataclass
@@ -106,7 +104,15 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         for join_config in join_configs:
             model = join_config.model
             if model != self.ConverterConfig.model and model not in joined_models:
-                query = query.join(model)
+                if join_config.join_type == JoinType.INNER:
+                    query = query.join(model)
+                elif join_config.join_type == JoinType.LEFT:
+                    query = query.outerjoin(model)
+                elif join_config.join_type == JoinType.FULL:
+                    query = query.outerjoin(model, full=True)
+                else:
+                    raise NotImplementedError
+
                 joined_models.append(model)
 
         return query
@@ -140,6 +146,74 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
                     JoinConfig(
                         model=model,
                         join_type=JoinType.INNER,
+                    )
+                )
+
+        return new_manager
+
+    def left_join(self, *relationships):
+        """
+        Specify relationships to be joined using LEFT JOIN.
+
+        Args:
+            *relationships: Relationship paths like 'group', 'group__owner'
+
+        Returns:
+            QueryManager: New instance with join specifications
+
+        Usage:
+            Item.query_manager.left_join('group').all()
+            Item.query_manager.left_join('group', 'group__owner').all()
+            Item.query_manager.left_join('group__owner').where(name='test').all()
+        """
+        new_manager = self._clone()
+
+        for relationship in relationships:
+            relationship = relationship.split("__")
+            models, _ = self.get_foreign_key_filtered_column(
+                relationship,
+                to_return_column=False,
+            )
+
+            for model in models:
+                new_manager.explicit_joins.append(
+                    JoinConfig(
+                        model=model,
+                        join_type=JoinType.LEFT,
+                    )
+                )
+
+        return new_manager
+
+    def full_join(self, *relationships):
+        """
+        Specify relationships to be joined using FULL JOIN.
+
+        Args:
+            *relationships: Relationship paths like 'group', 'group__owner'
+
+        Returns:
+            QueryManager: New instance with join specifications
+
+        Usage:
+            Item.query_manager.full_join('group').all()
+            Item.query_manager.full_join('group', 'group__owner').all()
+            Item.query_manager.full_join('group__owner').where(name='test').all()
+        """
+        new_manager = self._clone()
+
+        for relationship in relationships:
+            relationship = relationship.split("__")
+            models, _ = self.get_foreign_key_filtered_column(
+                relationship,
+                to_return_column=False,
+            )
+
+            for model in models:
+                new_manager.explicit_joins.append(
+                    JoinConfig(
+                        model=model,
+                        join_type=JoinType.FULL,
                     )
                 )
 
