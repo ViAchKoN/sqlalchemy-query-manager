@@ -471,6 +471,71 @@ db_objects = query_manager.all()  # Uses the session set earlier
 db_object = query_manager.get(id=1)  # Also uses the session
 ```
 
+## Explicit Join Operations
+The SQLAlchemy Query Manager now supports explicit join operations, giving you fine-grained control over how tables are joined in your queries. This is particularly useful when you need to specify the type of join or when working with complex relationships.
+Available Join Methods
+The package provides four main join methods:
+
+```
+join() / inner_join() – Performs INNER JOIN operations
+left_join() – Performs LEFT OUTER JOIN operations
+full_join() – Performs FULL OUTER JOIN operations
+```
+
+**Basic Usage**
+
+All join methods accept relationship paths as arguments and return a new QueryManager instance, allowing for method chaining.
+Inner Join
+Use `join()` or `inner_join()` to perform `INNER JOIN` operations. 
+This will only return records that have matching records in both tables.
+
+```python
+# Simple inner join
+results = ObjectModel.query_manager.join('parent').all() 
+
+# Multiple joins
+results = ObjectModel.query_manager.join('parent', 'parent__nested_parent').all()
+
+# Chain with filters
+results = ObjectModel.query_manager.join('parent').where(group__name='Active').all()
+
+# Using explicit inner_join method
+results = ObjectModel.query_manager.inner_join('parent__nested_parent').where(
+    parent__nested_parent__name='John'
+).all()
+```
+
+**Left Join**
+
+Use `left_join()` to perform `LEFT OUTER JOIN` operations. 
+This returns all records from the left table and matching records from the right table, with NULL values for non-matching records.
+
+```python
+# Left join to include items without groups
+results = ObjectModel.query_manager.left_join('parent').all()
+
+# Left join with nested relationships
+results = ObjectModel.query_manager.left_join('parent__nested_parent').all()
+
+# Useful for finding orphaned records
+orphaned_items = ObjectModel.query_manager.left_join('group').where(
+    parent__id__isnull=True
+).all()
+```
+
+**Full Join**
+
+Use `full_join()` to perform `FULL OUTER JOIN` operations. This returns all records from both tables, with NULL values where there are no matches.
+```python
+
+# Full join to get all items and all groups
+results = ObjectModel.query_manager.full_join('parent').all()
+
+# Full join with filters
+results = ObjectModel.query_manager.full_join('parent__nested_parent').where(
+    group__owner__email__isnull=False
+).all()
+```
 ____
 ### Links
 [Github](https://github.com/ViAchKoN/sqlalchemy-query-manager)

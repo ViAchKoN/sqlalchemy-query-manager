@@ -1,3 +1,5 @@
+import dataclasses
+import enum
 import typing
 
 from dataclass_sqlalchemy_mixins.base.mixins import (
@@ -14,6 +16,20 @@ from sqlalchemy_query_manager.core.helpers import E
 from sqlalchemy_query_manager.core.utils import get_async_session, get_session
 
 
+class JoinType(enum.Enum):
+    """Enumeration of supported join types"""
+
+    INNER = "inner"
+    LEFT = "left"
+    FULL = "full"
+
+
+@dataclasses.dataclass
+class JoinConfig:
+    model: DeclarativeMeta
+    join_type: JoinType = JoinType.INNER
+
+
 class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin):
     def __init__(self, model, session=None):
         self.ConverterConfig.model = model
@@ -27,10 +43,11 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         self.fields = None
 
-        self.filters = {}
+        self._filters = {}
         self._order_by = set()
 
         self.models_to_join = []
+        self.explicit_joins: typing.List[JoinConfig] = []
 
         self._limit = None
         self._offset = None
@@ -45,12 +62,14 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         )
 
         # Copy all mutable state
-        new_manager.filters = self.filters.copy()
+        new_manager._filters = self._filters.copy()
         new_manager._order_by = self._order_by.copy()
         new_manager._limit = self._limit
         new_manager._offset = self._offset
         new_manager.fields = self.fields.copy() if self.fields else None
         new_manager.models_to_join = self.models_to_join.copy()
+        new_manager.explicit_joins = self.explicit_joins
+
         new_manager._to_commit = self._to_commit
 
         # Copy internal state
@@ -62,7 +81,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
     def join_models(
         self,
         query,
-        models: typing.List[DeclarativeMeta],
+        join_configs: typing.List[JoinConfig],
     ):
         query = query
 
@@ -82,11 +101,141 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
                 if joined_models:
                     break
 
-        for model in models:
+        for join_config in join_configs:
+            model = join_config.model
             if model != self.ConverterConfig.model and model not in joined_models:
-                query = query.join(model)
+                if join_config.join_type == JoinType.INNER:
+                    query = query.join(model)
+                elif join_config.join_type == JoinType.LEFT:
+                    query = query.outerjoin(model)
+                elif join_config.join_type == JoinType.FULL:
+                    query = query.outerjoin(model, full=True)
+                else:
+                    raise NotImplementedError
+
+                joined_models.append(model)
 
         return query
+
+    def inner_join(self, *relationships):
+        """
+        Specify relationships to be joined using INNER JOIN.
+
+        Args:
+            *relationships: Relationship paths like 'group', 'group__owner'
+
+        Returns:
+            QueryManager: New instance with join specifications
+
+        Usage:
+            Item.query_manager.inner_join('group').all()
+            Item.query_manager.inner_join('group', 'group__owner').all()
+            Item.query_manager.inner_join('group__owner').where(name='test').all()
+        """
+        new_manager = self._clone()
+
+        for relationship in relationships:
+            relationship = relationship.split("__")
+            models, _ = self.get_foreign_key_path(
+                relationship,
+                to_return_column=False,
+            )
+
+            for model in models:
+                new_manager.explicit_joins.append(
+                    JoinConfig(
+                        model=model,
+                        join_type=JoinType.INNER,
+                    )
+                )
+
+        return new_manager
+
+    def join(self, *relationships):
+        """
+        Proxy to INNER JOIN.
+
+        Args:
+            *relationships: Relationship paths like 'group', 'group__owner'
+
+        Returns:
+            QueryManager: New instance with join specifications
+
+        Usage:
+            Item.query_manager.join('group').all()
+            Item.query_manager.join('group', 'group__owner').all()
+            Item.query_manager.join('group__owner').where(name='test').all()
+        """
+
+        return self.inner_join(*relationships)
+
+    def left_join(self, *relationships):
+        """
+        Specify relationships to be joined using LEFT JOIN.
+
+        Args:
+            *relationships: Relationship paths like 'group', 'group__owner'
+
+        Returns:
+            QueryManager: New instance with join specifications
+
+        Usage:
+            Item.query_manager.left_join('group').all()
+            Item.query_manager.left_join('group', 'group__owner').all()
+            Item.query_manager.left_join('group__owner').where(name='test').all()
+        """
+        new_manager = self._clone()
+
+        for relationship in relationships:
+            relationship = relationship.split("__")
+            models, _ = self.get_foreign_key_path(
+                relationship,
+                to_return_column=False,
+            )
+
+            for model in models:
+                new_manager.explicit_joins.append(
+                    JoinConfig(
+                        model=model,
+                        join_type=JoinType.LEFT,
+                    )
+                )
+
+        return new_manager
+
+    def full_join(self, *relationships):
+        """
+        Specify relationships to be joined using FULL JOIN.
+
+        Args:
+            *relationships: Relationship paths like 'group', 'group__owner'
+
+        Returns:
+            QueryManager: New instance with join specifications
+
+        Usage:
+            Item.query_manager.full_join('group').all()
+            Item.query_manager.full_join('group', 'group__owner').all()
+            Item.query_manager.full_join('group__owner').where(name='test').all()
+        """
+        new_manager = self._clone()
+
+        for relationship in relationships:
+            relationship = relationship.split("__")
+            models, _ = self.get_foreign_key_path(
+                relationship,
+                to_return_column=False,
+            )
+
+            for model in models:
+                new_manager.explicit_joins.append(
+                    JoinConfig(
+                        model=model,
+                        join_type=JoinType.FULL,
+                    )
+                )
+
+        return new_manager
 
     def get_model_field(
         self,
@@ -101,7 +250,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             field_params = field.split("__")
 
             if len(field_params) > 1:
-                models, db_field = self.get_foreign_key_filtered_column(
+                models, db_field = self.get_foreign_key_path(
                     models_path_to_look=field_params,
                 )
                 if db_field is None:
@@ -120,14 +269,21 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         _fields = []
         for field in fields:
             if field == "*":
-                for column in self.ConverterConfig.model.__table__.columns:
-                    _fields.append(column)
-                hybrids = [
-                    getattr(self.ConverterConfig.model, name)
-                    for name, attr in vars(self.ConverterConfig.model).items()
-                    if isinstance(attr, hybrid_property)
-                ]
-                _fields.extend(hybrids)
+                models = [self.ConverterConfig.model]
+
+                if query_manager.explicit_joins:
+                    for explicit_join in query_manager.explicit_joins:
+                        models.append(explicit_join.model)
+
+                for model in models:
+                    for column in model.__table__.columns:
+                        _fields.append(column)
+                    hybrids = [
+                        getattr(model, name)
+                        for name, attr in vars(model).items()
+                        if isinstance(attr, hybrid_property)
+                    ]
+                    _fields.extend(hybrids)
                 continue
 
             if isinstance(field, InstrumentedAttribute):
@@ -157,13 +313,14 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
     @property
     def binary_expressions(self):
-        if not self._binary_expressions and self.filters:
+        if not self._binary_expressions and self._filters:
             models_binary_expressions = self.get_models_binary_expressions(
-                filters=self.filters
+                filters=self._filters
             )
 
             for model_binary_expression in models_binary_expressions:
-                self.models_to_join.extend(model_binary_expression.get("models"))
+                for model in model_binary_expression.get("models"):
+                    self.models_to_join.append(JoinConfig(model=model))
                 self._binary_expressions.append(
                     model_binary_expression.get("binary_expression")
                 )
@@ -188,8 +345,8 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             )
 
             for pos, model_unary_expression in enumerate(models_unary_expressions):
-                self.models_to_join.extend(model_unary_expression.get("models"))
-
+                for model in model_unary_expression.get("models"):
+                    self.models_to_join.append(JoinConfig(model=model))
                 unary_expression = model_unary_expression.get("unary_expression")
 
                 if pos in e_pos:
@@ -204,25 +361,29 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
     def query(self):
         query = select(self.ConverterConfig.model)
 
-        if self.fields:
-            query = select(*self.fields)
+        # Apply explicit joins
+        if self.explicit_joins:
+            query = self.join_models(
+                query=query,
+                join_configs=self.explicit_joins,
+            )
 
+        # Apply binary expressions
         if self.binary_expressions:
-            if self.models_to_join != [
-                self.ConverterConfig.model,
-            ]:
-                query = self.join_models(
-                    query=query,
-                    models=self.models_to_join,
-                )
+            query = self.join_models(
+                query=query,
+                join_configs=self.models_to_join,
+            )
             query = query.where(*self.binary_expressions)
 
+        # Apply unary expressions
         if self.unary_expressions:
-            if self.models_to_join != [
-                self.ConverterConfig.model,
-            ]:
-                query = self.join_models(query=query, models=self.models_to_join)
+            query = self.join_models(query=query, join_configs=self.models_to_join)
             query = query.order_by(*self.unary_expressions)
+
+        # Select fields
+        if self.fields:
+            query = query.with_only_columns(*self.fields)
 
         if self._offset:
             query = query.offset(self._offset)
@@ -301,8 +462,8 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
     def where(self, **kwargs):
         query_manager = self._clone()
 
-        query_manager.filters = {
-            **self.filters,
+        query_manager._filters = {
+            **self._filters,
             **kwargs,
         }
 
@@ -440,7 +601,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         Raises:
             ValueError: If no filters are set (to prevent accidental full table updates)
         """
-        if not self.filters:
+        if not self._filters:
             raise ValueError(
                 "Cannot update without filters. Use where() to specify criteria."
             )
@@ -491,7 +652,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         # Remove expunge parameter injected by decorator since we don't use it
         kwargs.pop("expunge", None)
 
-        if not self.filters:
+        if not self._filters:
             raise ValueError(
                 "Cannot update without filters. Use where() to specify criteria."
             )
@@ -622,7 +783,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         Raises:
             ValueError: If no filters are set (to prevent accidental full table deletions)
         """
-        if not self.filters:
+        if not self._filters:
             raise ValueError(
                 "Cannot delete without filters. Use where() to specify criteria."
             )
@@ -657,7 +818,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         if kwargs:
             # Create new query manager with additional filters
             query_manager = self.__class__(self.ConverterConfig.model, session)
-            query_manager.filters = {**self.filters, **kwargs}
+            query_manager._filters = {**self._filters, **kwargs}
             return query_manager.exists(session=session)
 
         # Use current filters
@@ -674,7 +835,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             New QueryManager instance
         """
         new_manager = self.__class__(self.ConverterConfig.model, self.session)
-        new_manager.filters = self.filters.copy()
+        new_manager._filters = self._filters.copy()
         new_manager._order_by = self._order_by.copy()
         new_manager._limit = self._limit
         new_manager._offset = self._offset
@@ -794,7 +955,7 @@ class AsyncQueryManager(QueryManager):
     @get_async_session
     async def update(self, session=None, expunge=True, **kwargs):
         """Async version of update method that returns updated objects."""
-        if not self.filters:
+        if not self._filters:
             raise ValueError(
                 "Cannot update without filters. Use where() to specify criteria."
             )
@@ -833,7 +994,7 @@ class AsyncQueryManager(QueryManager):
         # Remove expunge parameter injected by decorator since we don't use it
         kwargs.pop("expunge", None)
 
-        if not self.filters:
+        if not self._filters:
             raise ValueError(
                 "Cannot update without filters. Use where() to specify criteria."
             )
@@ -917,7 +1078,7 @@ class AsyncQueryManager(QueryManager):
     @get_async_session
     async def delete(self, session=None):
         """Async version of delete method."""
-        if not self.filters:
+        if not self._filters:
             raise ValueError(
                 "Cannot delete without filters. Use where() to specify criteria."
             )
@@ -941,7 +1102,7 @@ class AsyncQueryManager(QueryManager):
         """Async version of exists method."""
         if kwargs:
             query_manager = self.__class__(self.ConverterConfig.model, session)
-            query_manager.filters = {**self.filters, **kwargs}
+            query_manager._filters = {**self._filters, **kwargs}
             return await query_manager.exists(session=session)
 
         query = select(self.ConverterConfig.model).where(*self.binary_expressions)
