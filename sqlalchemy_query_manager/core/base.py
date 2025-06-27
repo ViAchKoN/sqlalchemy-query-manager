@@ -43,7 +43,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         self.fields = None
 
-        self.filters = {}
+        self._filters = {}
         self._order_by = set()
 
         self.models_to_join = []
@@ -62,7 +62,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         )
 
         # Copy all mutable state
-        new_manager.filters = self.filters.copy()
+        new_manager._filters = self._filters.copy()
         new_manager._order_by = self._order_by.copy()
         new_manager._limit = self._limit
         new_manager._offset = self._offset
@@ -136,7 +136,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         for relationship in relationships:
             relationship = relationship.split("__")
-            models, _ = self.get_foreign_key_filtered_column(
+            models, _ = self.get_foreign_key_path(
                 relationship,
                 to_return_column=False,
             )
@@ -150,6 +150,24 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
                 )
 
         return new_manager
+
+    def join(self, *relationships):
+        """
+        Proxy to INNER JOIN.
+
+        Args:
+            *relationships: Relationship paths like 'group', 'group__owner'
+
+        Returns:
+            QueryManager: New instance with join specifications
+
+        Usage:
+            Item.query_manager.join('group').all()
+            Item.query_manager.join('group', 'group__owner').all()
+            Item.query_manager.join('group__owner').where(name='test').all()
+        """
+
+        return self.inner_join(*relationships)
 
     def left_join(self, *relationships):
         """
@@ -170,7 +188,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         for relationship in relationships:
             relationship = relationship.split("__")
-            models, _ = self.get_foreign_key_filtered_column(
+            models, _ = self.get_foreign_key_path(
                 relationship,
                 to_return_column=False,
             )
@@ -204,7 +222,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         for relationship in relationships:
             relationship = relationship.split("__")
-            models, _ = self.get_foreign_key_filtered_column(
+            models, _ = self.get_foreign_key_path(
                 relationship,
                 to_return_column=False,
             )
@@ -232,7 +250,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             field_params = field.split("__")
 
             if len(field_params) > 1:
-                models, db_field = self.get_foreign_key_filtered_column(
+                models, db_field = self.get_foreign_key_path(
                     models_path_to_look=field_params,
                 )
                 if db_field is None:
@@ -295,9 +313,9 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
     @property
     def binary_expressions(self):
-        if not self._binary_expressions and self.filters:
+        if not self._binary_expressions and self._filters:
             models_binary_expressions = self.get_models_binary_expressions(
-                filters=self.filters
+                filters=self._filters
             )
 
             for model_binary_expression in models_binary_expressions:
@@ -444,8 +462,8 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
     def where(self, **kwargs):
         query_manager = self._clone()
 
-        query_manager.filters = {
-            **self.filters,
+        query_manager._filters = {
+            **self._filters,
             **kwargs,
         }
 
@@ -583,7 +601,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         Raises:
             ValueError: If no filters are set (to prevent accidental full table updates)
         """
-        if not self.filters:
+        if not self._filters:
             raise ValueError(
                 "Cannot update without filters. Use where() to specify criteria."
             )
@@ -634,7 +652,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         # Remove expunge parameter injected by decorator since we don't use it
         kwargs.pop("expunge", None)
 
-        if not self.filters:
+        if not self._filters:
             raise ValueError(
                 "Cannot update without filters. Use where() to specify criteria."
             )
@@ -765,7 +783,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         Raises:
             ValueError: If no filters are set (to prevent accidental full table deletions)
         """
-        if not self.filters:
+        if not self._filters:
             raise ValueError(
                 "Cannot delete without filters. Use where() to specify criteria."
             )
@@ -800,7 +818,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         if kwargs:
             # Create new query manager with additional filters
             query_manager = self.__class__(self.ConverterConfig.model, session)
-            query_manager.filters = {**self.filters, **kwargs}
+            query_manager._filters = {**self._filters, **kwargs}
             return query_manager.exists(session=session)
 
         # Use current filters
@@ -817,7 +835,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             New QueryManager instance
         """
         new_manager = self.__class__(self.ConverterConfig.model, self.session)
-        new_manager.filters = self.filters.copy()
+        new_manager._filters = self._filters.copy()
         new_manager._order_by = self._order_by.copy()
         new_manager._limit = self._limit
         new_manager._offset = self._offset
@@ -937,7 +955,7 @@ class AsyncQueryManager(QueryManager):
     @get_async_session
     async def update(self, session=None, expunge=True, **kwargs):
         """Async version of update method that returns updated objects."""
-        if not self.filters:
+        if not self._filters:
             raise ValueError(
                 "Cannot update without filters. Use where() to specify criteria."
             )
@@ -976,7 +994,7 @@ class AsyncQueryManager(QueryManager):
         # Remove expunge parameter injected by decorator since we don't use it
         kwargs.pop("expunge", None)
 
-        if not self.filters:
+        if not self._filters:
             raise ValueError(
                 "Cannot update without filters. Use where() to specify criteria."
             )
@@ -1060,7 +1078,7 @@ class AsyncQueryManager(QueryManager):
     @get_async_session
     async def delete(self, session=None):
         """Async version of delete method."""
-        if not self.filters:
+        if not self._filters:
             raise ValueError(
                 "Cannot delete without filters. Use where() to specify criteria."
             )
@@ -1084,7 +1102,7 @@ class AsyncQueryManager(QueryManager):
         """Async version of exists method."""
         if kwargs:
             query_manager = self.__class__(self.ConverterConfig.model, session)
-            query_manager.filters = {**self.filters, **kwargs}
+            query_manager._filters = {**self._filters, **kwargs}
             return await query_manager.exists(session=session)
 
         query = select(self.ConverterConfig.model).where(*self.binary_expressions)

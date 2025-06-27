@@ -239,13 +239,13 @@ toml = ["tomli"]
 
 [[package]]
 name = "dataclass-sqlalchemy-mixins"
-version = "0.3.1"
+version = "0.3.2"
 description = "Allows to convert dataclasses to sqlalchemy filters and orderings."
 optional = false
 python-versions = "<4.0.0,>=3.8.1"
 files = [
-    {file = "dataclass_sqlalchemy_mixins-0.3.1-py3-none-any.whl", hash = "sha256:b575dae62da54bbaa4bc23b1e66f2ed04fb7261e946f80490bdd94bfd331f01f"},
-    {file = "dataclass_sqlalchemy_mixins-0.3.1.tar.gz", hash = "sha256:9406e8f067c77379ce6b51f2464af5642062d6570c26baa96743887be8b62939"},
+    {file = "dataclass_sqlalchemy_mixins-0.3.2-py3-none-any.whl", hash = "sha256:840520bc4ad24a65e737df0169b1da58714e9cd82f2bc3a1e8967f937bc666dd"},
+    {file = "dataclass_sqlalchemy_mixins-0.3.2.tar.gz", hash = "sha256:9647df7a4dfee20ded027ae01cb176919f5f709465343d943c9d3ba1f1a52dd0"},
 ]
 
 [package.dependencies]
@@ -996,4 +996,4 @@ test = ["covdefaults (>=2.3)", "coverage (>=7.2.7)", "coverage-enable-subprocess
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.1"
-content-hash = "47f062388dc1bfbab58d49b56e96d00f5082504a33b5fbe5ef03250e00f2d050"
+content-hash = "e936562062bc4a15047b025237b55f3b02c41c90318040d09958fd4c7027bb70"
