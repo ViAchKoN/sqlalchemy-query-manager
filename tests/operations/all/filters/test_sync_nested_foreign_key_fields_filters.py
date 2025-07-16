@@ -1,6 +1,11 @@
 import datetime as dt
 
+from sqlalchemy.orm.util import _ORMJoin
+
 from tests import models, models_factory
+
+
+_ORMJoin
 
 
 def test_all_filter__eq__ok(

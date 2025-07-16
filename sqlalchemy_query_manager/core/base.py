@@ -1088,7 +1088,9 @@ class AsyncQueryManager(QueryManager):
         if self.binary_expressions:
             delete_query = delete_query.where(*self.binary_expressions)
 
-        result = await session.execute(delete_query)
+        result = await session.execute(
+            delete_query, execution_options={"synchronize_session": False}
+        )
 
         if isinstance(self.session, sessionmaker):
             await session.commit()
