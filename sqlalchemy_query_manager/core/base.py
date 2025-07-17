@@ -32,6 +32,8 @@ class JoinConfig:
 
 class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin):
     def __init__(self, model, session=None):
+        super().__init__()
+
         self.ConverterConfig.model = model
 
         self.session: typing.Union[Session, AsyncSession, sessionmaker] = session
@@ -68,7 +70,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         new_manager._offset = self._offset
         new_manager.fields = self.fields.copy() if self.fields else None
         new_manager.models_to_join = self.models_to_join.copy()
-        new_manager.explicit_joins = self.explicit_joins
+        new_manager.explicit_joins = self.explicit_joins.copy()
 
         new_manager._to_commit = self._to_commit
 
@@ -1076,7 +1078,7 @@ class AsyncQueryManager(QueryManager):
         return updated_objects
 
     @get_async_session
-    async def delete(self, session=None):
+    async def delete(self, session=None, synchronize_session=True):
         """Async version of delete method."""
         if not self._filters:
             raise ValueError(
@@ -1088,6 +1090,7 @@ class AsyncQueryManager(QueryManager):
         if self.binary_expressions:
             delete_query = delete_query.where(*self.binary_expressions)
 
+        # delete_query.compile(compile_kwargs={'literal_binds': True})
         result = await session.execute(
             delete_query, execution_options={"synchronize_session": False}
         )
