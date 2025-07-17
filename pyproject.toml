@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sqlalchemy-query-manager"
-version = "0.4.1"
+version = "0.4.2"
 description = ""
 authors = ["ViAchKoN"]
 readme = "README.md"
@@ -8,7 +8,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.8.1"
-dataclass-sqlalchemy-mixins = "^0.3.2"
+dataclass-sqlalchemy-mixins = "^0.3.4"
 sqlalchemy = "^1.4.0"
 
 
