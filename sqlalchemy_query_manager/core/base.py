@@ -57,6 +57,8 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         self._binary_expressions = []
         self._unary_expressions = []
 
+        self._distinct = None
+
     def _clone(self):
         """Create a copy of the current QueryManager"""
         new_manager = self.__class__(
@@ -73,6 +75,8 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         new_manager.explicit_joins = self.explicit_joins.copy()
 
         new_manager._to_commit = self._to_commit
+
+        new_manager._distinct = self._distinct
 
         # Copy internal state
         new_manager._binary_expressions = self._binary_expressions.copy()
@@ -313,6 +317,12 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         query_manager._offset = offset
         return query_manager
 
+    def distinct(self):
+        query_manager = self._clone()
+
+        query_manager._distinct = True
+        return query_manager
+
     @property
     def binary_expressions(self):
         if not self._binary_expressions and self._filters:
@@ -392,6 +402,9 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         if self._limit:
             query = query.limit(self._limit)
+
+        if self._distinct:
+            query = query.distinct()
 
         return query
 
