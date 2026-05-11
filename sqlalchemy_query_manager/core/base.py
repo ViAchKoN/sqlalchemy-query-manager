@@ -6,7 +6,7 @@ from dataclass_sqlalchemy_mixins.base.mixins import (
     SqlAlchemyFilterConverterMixin,
     SqlAlchemyOrderConverterMixin,
 )
-from sqlalchemy import delete, func, inspect, select, update
+from sqlalchemy import delete, func, inspect, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import DeclarativeMeta, InstrumentedAttribute, Session, sessionmaker
@@ -546,6 +546,28 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         result = session.execute(query).mappings().one()
         return dict(result)
 
+    @get_session
+    def raw(self, sql: str, session=None, expunge=True, **params):
+        """
+        Execute a raw SQL query and return results as a list of dict-like objects.
+
+        Args:
+            sql: Raw SQL string with named placeholders (e.g. WHERE id = :id)
+            **params: Named parameters to bind safely into the query
+
+        Returns:
+            List of RowMapping objects (accessible by column name)
+
+        Usage:
+            Item.query_manager.raw("SELECT * FROM item WHERE id = :id", id=1)
+            Item.query_manager.raw(
+                "SELECT group_id, COUNT(*) as cnt FROM item GROUP BY group_id HAVING COUNT(*) > :min",
+                min=2,
+            )
+        """
+        result = session.execute(text(sql), params)
+        return result.mappings().all()
+
     def with_session(self, session):
         query_manager = self._clone()
 
@@ -981,6 +1003,12 @@ class AsyncQueryManager(QueryManager):
 
         result = (await session.execute(query)).mappings().one()
         return dict(result)
+
+    @get_async_session
+    async def raw(self, sql: str, session=None, **params):
+        """Async version of raw method."""
+        result = await session.execute(text(sql), params)
+        return result.mappings().all()
 
     @get_async_session
     async def create(self, session=None, **kwargs):
