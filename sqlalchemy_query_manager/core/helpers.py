@@ -1,4 +1,6 @@
-from sqlalchemy import and_, or_
+from sqlalchemy import and_
+from sqlalchemy import func as sa_func
+from sqlalchemy import or_
 
 
 class E:
@@ -74,3 +76,43 @@ class Q:
             exprs.append(mbe.get("binary_expression"))
 
         return and_(*exprs), models
+
+
+class AggregateFunc:
+    """
+    Base class for aggregate functions used in aggregate().
+
+    Usage:
+        Item.query_manager.aggregate(total=Sum('number'), avg=Avg('number'))
+        Item.query_manager.where(is_valid=True).aggregate(count=Count('id'))
+    """
+
+    _sa_func_name: str
+
+    def __init__(self, field: str):
+        self.field = field
+
+    def resolve(self, query_manager):
+        """Convert to a SQLAlchemy aggregate expression."""
+        db_field = query_manager.get_model_field(self.field)
+        return getattr(sa_func, self._sa_func_name)(db_field)
+
+
+class Sum(AggregateFunc):
+    _sa_func_name = "sum"
+
+
+class Avg(AggregateFunc):
+    _sa_func_name = "avg"
+
+
+class Count(AggregateFunc):
+    _sa_func_name = "count"
+
+
+class Min(AggregateFunc):
+    _sa_func_name = "min"
+
+
+class Max(AggregateFunc):
+    _sa_func_name = "max"
