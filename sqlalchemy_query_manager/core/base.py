@@ -12,7 +12,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import DeclarativeMeta, InstrumentedAttribute, Session, sessionmaker
 
 from sqlalchemy_query_manager.consts import classproperty
-from sqlalchemy_query_manager.core.helpers import E
+from sqlalchemy_query_manager.core.helpers import E, Q
 from sqlalchemy_query_manager.core.utils import get_async_session, get_session
 
 
@@ -58,6 +58,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         self._unary_expressions = []
 
         self._distinct = None
+        self._q_filters: typing.List[Q] = []
 
     def _clone(self):
         """Create a copy of the current QueryManager"""
@@ -81,6 +82,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         # Copy internal state
         new_manager._binary_expressions = self._binary_expressions.copy()
         new_manager._unary_expressions = self._unary_expressions.copy()
+        new_manager._q_filters = self._q_filters.copy()
 
         return new_manager
 
@@ -325,17 +327,25 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
     @property
     def binary_expressions(self):
-        if not self._binary_expressions and self._filters:
-            models_binary_expressions = self.get_models_binary_expressions(
-                filters=self._filters
-            )
-
-            for model_binary_expression in models_binary_expressions:
-                for model in model_binary_expression.get("models"):
-                    self.models_to_join.append(JoinConfig(model=model))
-                self._binary_expressions.append(
-                    model_binary_expression.get("binary_expression")
+        if not self._binary_expressions and (self._filters or self._q_filters):
+            if self._filters:
+                models_binary_expressions = self.get_models_binary_expressions(
+                    filters=self._filters
                 )
+
+                for model_binary_expression in models_binary_expressions:
+                    for model in model_binary_expression.get("models"):
+                        self.models_to_join.append(JoinConfig(model=model))
+                    self._binary_expressions.append(
+                        model_binary_expression.get("binary_expression")
+                    )
+
+            for q in self._q_filters:
+                expr, models = q.resolve(self)
+                for model in models:
+                    self.models_to_join.append(JoinConfig(model=model))
+                self._binary_expressions.append(expr)
+
         return self._binary_expressions
 
     @property
@@ -474,13 +484,20 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         return result
 
-    def where(self, **kwargs):
+    def where(self, *args, **kwargs):
         query_manager = self._clone()
 
         query_manager._filters = {
             **self._filters,
             **kwargs,
         }
+
+        for arg in args:
+            if not isinstance(arg, Q):
+                raise TypeError(
+                    f"Positional arguments to where() must be Q objects, got {type(arg)}"
+                )
+        query_manager._q_filters = self._q_filters + list(args)
 
         return query_manager
 
