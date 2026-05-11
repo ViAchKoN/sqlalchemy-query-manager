@@ -585,7 +585,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             Tuple of (instance, created) where created is True if instance was created
         """
         # Try to get existing instance
-        existing = self.get(session=session, expunge=False, **kwargs)
+        existing = self.get(session=session, **kwargs)
 
         if existing:
             if expunge:
@@ -597,7 +597,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         if defaults:
             create_kwargs.update(defaults)
 
-        new_obj = self.create(session=session, expunge=expunge, **create_kwargs)
+        new_obj = self.create(session=session, **create_kwargs)
         return new_obj, True
 
     @get_session
@@ -704,7 +704,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             Tuple of (instance, created) where created is True if instance was created
         """
         # Try to get existing instance
-        existing = self.get(session=session, expunge=False, **kwargs)
+        existing = self.get(session=session, **kwargs)
 
         if existing:
             # Update existing instance
@@ -717,7 +717,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
                 session.commit()
             else:
                 session.flush()
-                session.refresh(existing)
+            session.refresh(existing)
 
             if expunge:
                 session.expunge(existing)
@@ -729,7 +729,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         if defaults:
             create_kwargs.update(defaults)
 
-        new_obj = self.create(session=session, expunge=expunge, **create_kwargs)
+        new_obj = self.create(session=session, **create_kwargs)
         return new_obj, True
 
     @get_session
@@ -772,11 +772,12 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
             if update_kwargs and filter_kwargs:
                 # Create a new query manager instance for each update
                 query_manager = self.__class__(self.ConverterConfig.model, session)
-                query_manager.where(**filter_kwargs)
-                updated_objs = query_manager.update(
-                    session=session, expunge=False, **update_kwargs
-                )
-                updated_objects.extend(updated_objs)
+                query_manager = query_manager.where(**filter_kwargs)
+                updated_objs = query_manager.update(session=session, **update_kwargs)
+                if isinstance(updated_objs, list):
+                    updated_objects.extend(updated_objs)
+                else:
+                    updated_objects.append(updated_objs)
 
         if expunge:
             for obj in updated_objects:
@@ -1082,11 +1083,14 @@ class AsyncQueryManager(QueryManager):
 
             if update_kwargs and filter_kwargs:
                 query_manager = self.__class__(self.ConverterConfig.model, session)
-                query_manager.where(**filter_kwargs)
+                query_manager = query_manager.where(**filter_kwargs)
                 updated_objs = await query_manager.update(
                     session=session, expunge=False, **update_kwargs
                 )
-                updated_objects.extend(updated_objs)
+                if isinstance(updated_objs, list):
+                    updated_objects.extend(updated_objs)
+                else:
+                    updated_objects.append(updated_objs)
 
         return updated_objects
 
