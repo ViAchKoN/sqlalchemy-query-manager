@@ -12,7 +12,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import DeclarativeMeta, InstrumentedAttribute, Session, sessionmaker
 
 from sqlalchemy_query_manager.consts import classproperty
-from sqlalchemy_query_manager.core.helpers import E, Q
+from sqlalchemy_query_manager.core.helpers import AggregateFunc, E, Q
 from sqlalchemy_query_manager.core.utils import get_async_session, get_session
 
 
@@ -515,6 +515,37 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         ).scalar_one()
         return count
 
+    @get_session
+    def aggregate(self, session=None, expunge=True, **kwargs):
+        """
+        Execute aggregate functions and return results as a dict.
+
+        Args:
+            session: Database session
+            **kwargs: Mapping of result key to AggregateFunc instance
+
+        Returns:
+            Dict of aggregated values
+
+        Usage:
+            Item.query_manager.aggregate(total=Sum('number'), avg=Avg('number'))
+            Item.query_manager.where(is_valid=True).aggregate(count=Count('id'))
+        """
+        columns = [
+            agg_func.resolve(self).label(name)
+            for name, agg_func in kwargs.items()
+            if isinstance(agg_func, AggregateFunc)
+        ]
+
+        query = select(*columns)
+
+        if self.binary_expressions:
+            query = self.join_models(query=query, join_configs=self.models_to_join)
+            query = query.where(*self.binary_expressions)
+
+        result = session.execute(query).mappings().one()
+        return dict(result)
+
     def with_session(self, session):
         query_manager = self._clone()
 
@@ -932,6 +963,24 @@ class AsyncQueryManager(QueryManager):
             await session.execute(select(func.count()).select_from(self.query))
         ).scalar_one()
         return count
+
+    @get_async_session
+    async def aggregate(self, session=None, **kwargs):
+        """Async version of aggregate method."""
+        columns = [
+            agg_func.resolve(self).label(name)
+            for name, agg_func in kwargs.items()
+            if isinstance(agg_func, AggregateFunc)
+        ]
+
+        query = select(*columns)
+
+        if self.binary_expressions:
+            query = self.join_models(query=query, join_configs=self.models_to_join)
+            query = query.where(*self.binary_expressions)
+
+        result = (await session.execute(query)).mappings().one()
+        return dict(result)
 
     @get_async_session
     async def create(self, session=None, **kwargs):
