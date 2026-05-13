@@ -878,7 +878,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         Raises:
             ValueError: If no filters are set (to prevent accidental full table updates)
         """
-        if not self._filters:
+        if not self._filters and not self._q_filters:
             raise ValueError(
                 "Cannot update without filters. Use where() to specify criteria."
             )
@@ -891,9 +891,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         update_query = update_query.values(**kwargs)
 
-        update_query_no_returning = update_query.values(**kwargs)
-
-        session.execute(update_query_no_returning)
+        session.execute(update_query)
 
         if self._to_commit:
             session.commit()
@@ -929,7 +927,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         # Remove expunge parameter injected by decorator since we don't use it
         kwargs.pop("expunge", None)
 
-        if not self._filters:
+        if not self._filters and not self._q_filters:
             raise ValueError(
                 "Cannot update without filters. Use where() to specify criteria."
             )
@@ -1048,7 +1046,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         return updated_objects
 
     @get_session
-    def delete(self, session=None):
+    def delete(self, session=None, expunge=True):
         """
         Delete records matching the current filters.
 
@@ -1061,7 +1059,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         Raises:
             ValueError: If no filters are set (to prevent accidental full table deletions)
         """
-        if not self._filters:
+        if not self._filters and not self._q_filters:
             raise ValueError(
                 "Cannot delete without filters. Use where() to specify criteria."
             )
@@ -1107,21 +1105,13 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
     def clone(self):
         """
-        Create a copy of the current QueryManager with the same filters and settings.
+        Create a full copy of the current QueryManager with all filters,
+        joins, ordering, eager loading and other settings preserved.
 
         Returns:
-            New QueryManager instance
+            New QueryManager instance with identical state
         """
-        new_manager = self.__class__(self.ConverterConfig.model, self.session)
-        new_manager._filters = self._filters.copy()
-        new_manager._order_by = self._order_by.copy()
-        new_manager._limit = self._limit
-        new_manager._offset = self._offset
-
-        if self.fields:
-            new_manager.fields = self.fields.copy()
-
-        return new_manager
+        return self._clone()
 
 
 class AsyncQueryManager(QueryManager):
@@ -1259,7 +1249,7 @@ class AsyncQueryManager(QueryManager):
     @get_async_session
     async def update(self, session=None, expunge=True, **kwargs):
         """Async version of update method that returns updated objects."""
-        if not self._filters:
+        if not self._filters and not self._q_filters:
             raise ValueError(
                 "Cannot update without filters. Use where() to specify criteria."
             )
@@ -1298,7 +1288,7 @@ class AsyncQueryManager(QueryManager):
         # Remove expunge parameter injected by decorator since we don't use it
         kwargs.pop("expunge", None)
 
-        if not self._filters:
+        if not self._filters and not self._q_filters:
             raise ValueError(
                 "Cannot update without filters. Use where() to specify criteria."
             )
@@ -1385,7 +1375,7 @@ class AsyncQueryManager(QueryManager):
     @get_async_session
     async def delete(self, session=None, synchronize_session=True):
         """Async version of delete method."""
-        if not self._filters:
+        if not self._filters and not self._q_filters:
             raise ValueError(
                 "Cannot delete without filters. Use where() to specify criteria."
             )
