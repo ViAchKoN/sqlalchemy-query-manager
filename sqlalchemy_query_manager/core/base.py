@@ -28,6 +28,7 @@ class JoinType(enum.Enum):
 class JoinConfig:
     model: DeclarativeMeta
     join_type: JoinType = JoinType.INNER
+    relationship_attr: typing.Any = None  # for contains_eager
 
 
 class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin):
@@ -59,6 +60,8 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         self._distinct = None
         self._q_filters: typing.List[Q] = []
+        self._select_related: typing.List[str] = []
+        self._prefetch_related: typing.List[str] = []
 
     def _clone(self):
         """Create a copy of the current QueryManager"""
@@ -83,6 +86,8 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         new_manager._binary_expressions = self._binary_expressions.copy()
         new_manager._unary_expressions = self._unary_expressions.copy()
         new_manager._q_filters = self._q_filters.copy()
+        new_manager._select_related = self._select_related.copy()
+        new_manager._prefetch_related = self._prefetch_related.copy()
 
         return new_manager
 
@@ -112,12 +117,20 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         for join_config in join_configs:
             model = join_config.model
             if model != self.ConverterConfig.model and model not in joined_models:
+                # Use relationship-based join when relationship_attr is set
+                # (needed for contains_eager to work correctly)
+                target = (
+                    join_config.relationship_attr
+                    if join_config.relationship_attr is not None
+                    else model
+                )
+
                 if join_config.join_type == JoinType.INNER:
-                    query = query.join(model)
+                    query = query.join(target)
                 elif join_config.join_type == JoinType.LEFT:
-                    query = query.outerjoin(model)
+                    query = query.outerjoin(target)
                 elif join_config.join_type == JoinType.FULL:
-                    query = query.outerjoin(model, full=True)
+                    query = query.outerjoin(target, full=True)
                 else:
                     raise NotImplementedError
 
@@ -390,13 +403,22 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
                 join_configs=self.explicit_joins,
             )
 
-        # Apply binary expressions
-        if self.binary_expressions:
+        # Trigger binary_expressions computation (populates models_to_join)
+        binary_exprs = self.binary_expressions
+
+        # Build eager loading options AFTER models_to_join is populated
+        # so conflicts between FK filters and select_related are detected
+        eager_options = []
+        if self._select_related or self._prefetch_related:
+            eager_options = self._build_eager_options()
+
+        # Apply FK filter joins (models_to_join may be updated by _build_eager_options)
+        if binary_exprs:
             query = self.join_models(
                 query=query,
                 join_configs=self.models_to_join,
             )
-            query = query.where(*self.binary_expressions)
+            query = query.where(*binary_exprs)
 
         # Apply unary expressions
         if self.unary_expressions:
@@ -416,6 +438,9 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         if self._distinct:
             query = query.distinct()
 
+        if eager_options:
+            query = query.options(*eager_options)
+
         return query
 
     @get_session
@@ -424,6 +449,9 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         if not self.fields:
             result = result.scalars()
+            if self._select_related:
+                # joinedload/contains_eager can produce duplicate rows
+                result = result.unique()
 
         result = result.all()
 
@@ -536,6 +564,134 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
                 sql = sql.replace(f"%({key})s", _format_sql_value(value))
 
             return sql
+
+    def _resolve_relationship_path(self, path: str) -> typing.List[typing.Tuple]:
+        """
+        Resolve 'group__owner' → [(Item.group, Group), (Group.owner, Owner)]
+        """
+        parts = path.split("__")
+        model = self.ConverterConfig.model
+        segments = []
+
+        for part in parts:
+            rel_attr = getattr(model, part)
+            target_model = rel_attr.property.mapper.class_
+            segments.append((rel_attr, target_model))
+            model = target_model
+
+        return segments
+
+    def _build_eager_options(self) -> typing.List:
+        """
+        Build SQLAlchemy eager loading options for select_related / prefetch_related.
+
+        Uses a tree structure to avoid strategy conflicts when paths share prefixes,
+        e.g. select_related('group') + prefetch_related('group__owner').
+
+        - select_related  → joinedload (or contains_eager when already joined)
+        - prefetch_related → selectinload
+        """
+        from sqlalchemy.orm import contains_eager, joinedload, selectinload
+
+        already_joined = {jc.model for jc in self.models_to_join}
+
+        strategy_map = {
+            "joinedload": joinedload,
+            "selectinload": selectinload,
+            "contains_eager": contains_eager,
+        }
+
+        def get_strategy_name(rel_attr, target_model, default: str) -> str:
+            if target_model in already_joined:
+                # Upgrade JoinConfig to relationship-based join for contains_eager
+                for jc in self.models_to_join:
+                    if jc.model == target_model and jc.relationship_attr is None:
+                        jc.relationship_attr = rel_attr
+                return "contains_eager"
+            return default
+
+        # Build a tree: {attr_key: {"rel_attr": ..., "strategy": ..., "children": {...}}}
+        # Select_related is inserted first (higher priority) — existing nodes are NOT overridden.
+        roots: typing.Dict[str, typing.Any] = {}
+
+        def insert_path(path: str, default_strategy: str) -> None:
+            segments = self._resolve_relationship_path(path)
+            node_dict = roots
+
+            for rel_attr, target_model in segments:
+                key = rel_attr.key
+                if key not in node_dict:
+                    node_dict[key] = {
+                        "rel_attr": rel_attr,
+                        "strategy": get_strategy_name(
+                            rel_attr, target_model, default_strategy
+                        ),
+                        "children": {},
+                    }
+                # Descend regardless — children may differ
+                node_dict = node_dict[key]["children"]
+
+        for path in self._select_related:
+            insert_path(path, "joinedload")
+
+        for path in self._prefetch_related:
+            insert_path(path, "selectinload")
+
+        # Convert tree nodes to SQLAlchemy Load objects.
+        # Nodes with children produce one option per leaf to preserve full chains.
+        def build_options_from_node(
+            node: typing.Dict, parent_load: typing.Any = None
+        ) -> typing.List:
+            fn = strategy_map[node["strategy"]]
+            rel_attr = node["rel_attr"]
+
+            this_load = (
+                fn(rel_attr)
+                if parent_load is None
+                else getattr(parent_load, fn.__name__)(rel_attr)
+            )
+
+            if not node["children"]:
+                return [this_load]
+
+            result = []
+            for child in node["children"].values():
+                result.extend(build_options_from_node(child, this_load))
+            return result
+
+        options = []
+        for root_node in roots.values():
+            options.extend(build_options_from_node(root_node))
+
+        return options
+
+    def select_related(self, *paths: str) -> "QueryManager":
+        """
+        Eagerly load relationships using JOIN (joinedload).
+        When the relationship is already JOINed for a FK filter,
+        uses contains_eager to avoid duplicate JOINs.
+
+        Usage:
+            Item.query_manager.select_related('group').all()
+            Item.query_manager.select_related('group__owner').all()
+            Item.query_manager.where(group__name='foo').select_related('group').all()
+        """
+        query_manager = self._clone()
+        query_manager._select_related = self._select_related + list(paths)
+        return query_manager
+
+    def prefetch_related(self, *paths: str) -> "QueryManager":
+        """
+        Eagerly load relationships using a separate SELECT IN query (selectinload).
+        No JOIN conflicts — always safe to combine with FK filters.
+
+        Usage:
+            Item.query_manager.prefetch_related('group').all()
+            Item.query_manager.prefetch_related('group__owner').all()
+        """
+        query_manager = self._clone()
+        query_manager._prefetch_related = self._prefetch_related + list(paths)
+        return query_manager
 
     def order_by(self, *args):
         query_manager = self._clone()
@@ -1012,6 +1168,8 @@ class AsyncQueryManager(QueryManager):
 
         if not self.fields:
             result = result.scalars()
+            if self._select_related:
+                result = result.unique()
 
         return result.all()
 
