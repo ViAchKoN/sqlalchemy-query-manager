@@ -1,6 +1,28 @@
+import datetime
+import enum as python_enum
+
 from sqlalchemy import and_
 from sqlalchemy import func as sa_func
 from sqlalchemy import or_
+
+
+def _format_sql_value(value) -> str:
+    """Format a Python value as a SQL literal string (fallback for literal_binds)."""
+    if value is None:
+        return "NULL"
+    if isinstance(value, bool):
+        return "TRUE" if value else "FALSE"
+    if isinstance(value, datetime.datetime):
+        return f"'{value.strftime('%Y-%m-%d %H:%M:%S')}'"
+    if isinstance(value, datetime.date):
+        return f"'{value.strftime('%Y-%m-%d')}'"
+    if isinstance(value, python_enum.Enum):
+        return f"'{value.name}'"
+    if isinstance(value, str):
+        return "'" + value.replace("'", "''") + "'"
+    if isinstance(value, (list, tuple)):
+        return "(" + ", ".join(_format_sql_value(v) for v in value) + ")"
+    return str(value)
 
 
 class E:

@@ -12,7 +12,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import DeclarativeMeta, InstrumentedAttribute, Session, sessionmaker
 
 from sqlalchemy_query_manager.consts import classproperty
-from sqlalchemy_query_manager.core.helpers import AggregateFunc, E, Q
+from sqlalchemy_query_manager.core.helpers import AggregateFunc, E, Q, _format_sql_value
 from sqlalchemy_query_manager.core.utils import get_async_session, get_session
 
 
@@ -500,6 +500,42 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         query_manager._q_filters = self._q_filters + list(args)
 
         return query_manager
+
+    def get_sql_query(self) -> str:
+        """
+        Return the compiled SQL query as a string with literal values substituted.
+        Useful for debugging and logging.
+
+        Tries SQLAlchemy's literal_binds first (handles all standard types).
+        Falls back to manual formatting for custom Python types (enum, datetime, etc.).
+
+        Usage:
+            print(Item.query_manager.where(name="foo", is_valid=True).get_sql_query())
+        """
+        from sqlalchemy.dialects import postgresql
+
+        dialect = postgresql.dialect()
+
+        try:
+            compiled = self.query.compile(
+                dialect=dialect,
+                compile_kwargs={"literal_binds": True},
+            )
+            return str(compiled)
+        except Exception:
+            compiled = self.query.compile(dialect=dialect)
+            sql = str(compiled)
+
+            # Sort by key length descending to avoid partial replacements
+            params = sorted(
+                compiled.params.items(),
+                key=lambda x: len(x[0]),
+                reverse=True,
+            )
+            for key, value in params:
+                sql = sql.replace(f"%({key})s", _format_sql_value(value))
+
+            return sql
 
     def order_by(self, *args):
         query_manager = self._clone()

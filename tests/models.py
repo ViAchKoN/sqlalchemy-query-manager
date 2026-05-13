@@ -1,4 +1,5 @@
 import datetime as dt
+import enum
 import typing as tp
 
 import sqlalchemy as sa
@@ -72,6 +73,12 @@ class Group(BaseModel):
     items = relationship("Item", back_populates="group", lazy="dynamic")
 
 
+class ItemStatus(enum.Enum):
+    ACTIVE = "active"
+    PENDING = "pending"
+    INACTIVE = "inactive"
+
+
 class Item(BaseModel):
     __tablename__ = "item"
 
@@ -91,6 +98,10 @@ class Item(BaseModel):
         sa.Boolean,
         default=False,
         nullable=False,
+    )
+    status = sa.Column(
+        sa.Enum(ItemStatus),
+        nullable=True,
     )
 
     group_id = sa.Column(

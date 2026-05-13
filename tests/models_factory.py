@@ -56,4 +56,5 @@ class ItemFactory(CustomSQLAlchemyModelFactory):
     name = factory.Faker("word")
     number = factory.Faker("pyint")
     is_valid = factory.Faker("boolean")
+    status = None
     group = None
