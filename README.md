@@ -3,6 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/sqlalchemy-query-manager.svg)](https://pypi.org/project/sqlalchemy-query-manager/)
 [![Python versions](https://img.shields.io/pypi/pyversions/sqlalchemy-query-manager.svg)](https://pypi.org/project/sqlalchemy-query-manager/)
 [![Downloads](https://static.pepy.tech/badge/sqlalchemy-query-manager/month)](https://pepy.tech/project/sqlalchemy-query-manager)
+[![test](https://github.com/ViAchKoN/dataclass-sqlalchemy-mixins/workflows/Test/badge.svg?query=branch%3Amaster+event%3Apush)](https://github.com/ViAchKoN/dataclass-sqlalchemy-mixins/actions?query=branch%3Amaster+event%3Apush+workflow%3ATest++)
 
 Django-style ORM interface for SQLAlchemy — `Q` filters, eager loading, async support, and zero session boilerplate.
 
