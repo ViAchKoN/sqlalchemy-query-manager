@@ -554,20 +554,51 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         return query_manager
 
-    def get_sql_query(self) -> str:
+    def _detect_dialect(self):
+        """
+        Try to detect the SQLAlchemy dialect from the current session or engine.
+        Falls back to PostgreSQL as the most feature-rich dialect for debugging.
+        """
+        try:
+            session = self.session
+            if isinstance(session, sessionmaker):
+                # SA 1.4: sessionmaker may have a bound engine via kw['bind']
+                engine = session.kw.get("bind")
+                if engine is not None:
+                    return engine.dialect
+            elif hasattr(session, "bind") and session.bind is not None:
+                return session.bind.dialect
+            elif hasattr(session, "get_bind"):
+                return session.get_bind().dialect
+        except Exception:
+            pass
+
+        from sqlalchemy.dialects import postgresql
+
+        return postgresql.dialect()
+
+    def get_sql_query(self, dialect=None) -> str:
         """
         Return the compiled SQL query as a string with literal values substituted.
         Useful for debugging and logging.
+
+        Args:
+            dialect: SQLAlchemy dialect instance to use for compilation.
+                     If None, auto-detected from session/engine.
+                     Falls back to PostgreSQL dialect if detection fails.
 
         Tries SQLAlchemy's literal_binds first (handles all standard types).
         Falls back to manual formatting for custom Python types (enum, datetime, etc.).
 
         Usage:
             print(Item.query_manager.where(name="foo", is_valid=True).get_sql_query())
-        """
-        from sqlalchemy.dialects import postgresql
 
-        dialect = postgresql.dialect()
+            # Explicit dialect:
+            from sqlalchemy.dialects import sqlite
+            print(Item.query_manager.where(name="foo").get_sql_query(dialect=sqlite.dialect()))
+        """
+        if dialect is None:
+            dialect = self._detect_dialect()
 
         try:
             compiled = self.query.compile(
