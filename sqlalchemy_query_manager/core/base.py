@@ -47,7 +47,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         self.fields = None
 
         self._filters = {}
-        self._order_by = set()
+        self._order_by: typing.List = []
 
         self.models_to_join = []
         self.explicit_joins: typing.List[JoinConfig] = []
@@ -696,7 +696,9 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
     def order_by(self, *args):
         query_manager = self._clone()
 
-        query_manager._order_by.update(set(args))
+        # dict.fromkeys preserves insertion order and deduplicates
+        combined = list(dict.fromkeys(self._order_by + list(args)))
+        query_manager._order_by = combined
 
         return query_manager
 
@@ -1080,7 +1082,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         return result.rowcount
 
     @get_session
-    def exists(self, session=None, **kwargs):
+    def exists(self, session=None, expunge=True, **kwargs):
         """
         Check if any records exist matching the criteria.
 
@@ -1401,7 +1403,7 @@ class AsyncQueryManager(QueryManager):
     async def exists(self, session=None, **kwargs):
         """Async version of exists method."""
         if kwargs:
-            query_manager = self.__class__(self.ConverterConfig.model, session)
+            query_manager = self._clone()
             query_manager._filters = {**self._filters, **kwargs}
             return await query_manager.exists(session=session)
 

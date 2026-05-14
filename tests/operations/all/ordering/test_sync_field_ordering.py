@@ -172,3 +172,70 @@ def test_async_all__order_by__name__nulls_first__ok(
 
         for expected_item, result in zip(expected_items, results):
             assert result.as_dict() == expected_item.as_dict()
+
+
+def test_order_by__multiple_fields_order_preserved__ok(
+    db_session,
+    item_sql_query_manager,
+):
+    """Order of fields in multi-column ORDER BY must be preserved (set was breaking this)."""
+    import datetime as _dt
+
+    now = _dt.datetime.now()
+
+    # Two items with same created_at bucket — distinguishable only by number
+    item_a = models_factory.ItemFactory.create(
+        created_at=now + _dt.timedelta(days=1), number=10
+    )
+    item_b = models_factory.ItemFactory.create(
+        created_at=now + _dt.timedelta(days=1), number=5
+    )
+    item_c = models_factory.ItemFactory.create(
+        created_at=now + _dt.timedelta(days=2), number=99
+    )
+
+    # ORDER BY created_at ASC, number DESC
+    results = item_sql_query_manager.query_manager.order_by(
+        "created_at", "-number"
+    ).all()
+
+    # Same created_at: item_a (10) before item_b (5) DESC → item_a first
+    assert results[0].id == item_a.id
+    assert results[1].id == item_b.id
+    assert results[2].id == item_c.id
+
+
+def test_order_by__deduplication__ok(
+    db_session,
+    item_sql_query_manager,
+):
+    """Duplicate field in chained order_by must appear only once — first occurrence wins."""
+    models_factory.ItemFactory.create_batch(size=3)
+
+    qm1 = item_sql_query_manager.query_manager.order_by("id")
+    qm2 = qm1.order_by("id")  # duplicate
+
+    assert qm2._order_by == ["id"]  # deduplicated, not ["id", "id"]
+
+    # Results still correct
+    results = qm2.all()
+    assert len(results) == 3
+    assert [r.id for r in results] == sorted(r.id for r in results)
+
+
+def test_order_by__chained_order_preserved__ok(
+    db_session,
+    item_sql_query_manager,
+):
+    """Chained .order_by() calls must preserve the first field first."""
+    items = []
+    for number in [3, 1, 2]:
+        items.append(models_factory.ItemFactory.create(number=number))
+
+    # order_by("number") then chaining order_by("id") — number must be primary
+    results = (
+        item_sql_query_manager.query_manager.order_by("number").order_by("id").all()
+    )
+
+    numbers = [r.number for r in results]
+    assert numbers == sorted(numbers)

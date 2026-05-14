@@ -184,3 +184,69 @@ async def test_async_all__order_by__name__nulls_first__ok(
 
         for expected_item, result in zip(expected_items, results):
             assert result.as_dict() == expected_item.as_dict()
+
+
+@pytest.mark.asyncio
+async def test_async_order_by__multiple_fields_order_preserved__ok(
+    db_session,
+    async_item_sql_query_manager,
+):
+    """Order of fields in multi-column ORDER BY must be preserved."""
+    import datetime as _dt
+
+    now = _dt.datetime.now()
+
+    item_a = models_factory.ItemFactory.create(
+        created_at=now + _dt.timedelta(days=1), number=10
+    )
+    item_b = models_factory.ItemFactory.create(
+        created_at=now + _dt.timedelta(days=1), number=5
+    )
+    item_c = models_factory.ItemFactory.create(
+        created_at=now + _dt.timedelta(days=2), number=99
+    )
+
+    results = await async_item_sql_query_manager.query_manager.order_by(
+        "created_at", "-number"
+    ).all()
+
+    assert results[0].id == item_a.id
+    assert results[1].id == item_b.id
+    assert results[2].id == item_c.id
+
+
+@pytest.mark.asyncio
+async def test_async_order_by__deduplication__ok(
+    db_session,
+    async_item_sql_query_manager,
+):
+    """Duplicate field in chained order_by must appear only once."""
+    models_factory.ItemFactory.create_batch(size=3)
+
+    qm1 = async_item_sql_query_manager.query_manager.order_by("id")
+    qm2 = qm1.order_by("id")
+
+    assert qm2._order_by == ["id"]
+
+    results = await qm2.all()
+    assert len(results) == 3
+    assert [r.id for r in results] == sorted(r.id for r in results)
+
+
+@pytest.mark.asyncio
+async def test_async_order_by__chained_order_preserved__ok(
+    db_session,
+    async_item_sql_query_manager,
+):
+    """Chained .order_by() calls must preserve the first field first."""
+    for number in [3, 1, 2]:
+        models_factory.ItemFactory.create(number=number)
+
+    results = await (
+        async_item_sql_query_manager.query_manager.order_by("number")
+        .order_by("id")
+        .all()
+    )
+
+    numbers = [r.number for r in results]
+    assert numbers == sorted(numbers)
