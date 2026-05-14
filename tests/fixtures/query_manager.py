@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy.ext.hybrid import hybrid_property
 
-from sqlalchemy_query_manager.core.base import (
+from sqlalchemy_query_manager.core.mixins import (
     AsyncModelQueryManagerMixin,
     ModelQueryManagerMixin,
 )

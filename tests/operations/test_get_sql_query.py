@@ -319,3 +319,33 @@ def test_get_sql_query__combined__ok(
     assert normalize(sql) == normalize(
         f"{SELECT_ITEM} WHERE item.name = 'foo' ORDER BY item.number DESC LIMIT 5 OFFSET 2"
     )
+
+
+def test_get_sql_query__order_by_field_order_preserved__ok(
+    db_session,
+    item_sql_query_manager,
+):
+    """ORDER BY field order in SQL must match order_by() call, not arbitrary set order."""
+    sql = item_sql_query_manager.query_manager.order_by("number", "-id").get_sql_query()
+    sql_normalized = normalize(sql)
+
+    pos_number = sql_normalized.index("item.number ASC")
+    pos_id = sql_normalized.index("item.id DESC")
+
+    assert (
+        pos_number < pos_id
+    ), "item.number ASC must appear before item.id DESC in ORDER BY clause"
+
+
+def test_get_sql_query__explicit_dialect__ok(
+    db_session,
+    item_sql_query_manager,
+):
+    """get_sql_query(dialect=...) must use the provided dialect, not auto-detect."""
+    from sqlalchemy.dialects import postgresql
+
+    sql = item_sql_query_manager.query_manager.where(name="foo").get_sql_query(
+        dialect=postgresql.dialect()
+    )
+
+    assert normalize(sql) == normalize(f"{SELECT_ITEM} WHERE item.name = 'foo'")

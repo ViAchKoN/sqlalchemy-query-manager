@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager, contextmanager
 import pytest
 from sqlalchemy.orm import Session
 
-from sqlalchemy_query_manager.core.base import (
+from sqlalchemy_query_manager.core.mixins import (
     AsyncModelQueryManagerMixin,
     ModelQueryManagerMixin,
 )
