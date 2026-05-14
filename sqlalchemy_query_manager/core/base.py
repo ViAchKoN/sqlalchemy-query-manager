@@ -429,10 +429,10 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         if self.fields:
             query = query.with_only_columns(*self.fields)
 
-        if self._offset:
+        if self._offset is not None:
             query = query.offset(self._offset)
 
-        if self._limit:
+        if self._limit is not None:
             query = query.limit(self._limit)
 
         if self._distinct:
@@ -499,15 +499,40 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
     @get_session
     def get(self, session=None, expunge=True, **kwargs):
-        binary_expressions = self.get_binary_expressions(filters=kwargs)
+        """
+        Return exactly one object matching the query.
 
-        result = (
-            session.query(self.ConverterConfig.model)
-            .filter(*binary_expressions)
-            .first()
+        Raises:
+            DoesNotExist: If no object matches.
+            MultipleObjectsReturned: If more than one object matches.
+        """
+        from sqlalchemy_query_manager.core.exceptions import (
+            DoesNotExist,
+            MultipleObjectsReturned,
         )
 
-        if result and expunge:
+        # Merge extra kwargs into filters while preserving _q_filters and all other state
+        if kwargs:
+            query_manager = self._clone()
+            query_manager._filters = {**self._filters, **kwargs}
+        else:
+            query_manager = self
+
+        # LIMIT 2 to efficiently detect MultipleObjectsReturned
+        results = session.execute(query_manager.query.limit(2))
+        if not query_manager.fields:
+            results = results.scalars()
+        results = results.all()
+
+        model_name = self.ConverterConfig.model.__name__
+
+        if not results:
+            raise DoesNotExist(f"{model_name} matching query does not exist.")
+        if len(results) > 1:
+            raise MultipleObjectsReturned(f"get() returned more than one {model_name}.")
+
+        result = results[0]
+        if not query_manager.fields and expunge:
             session.expunge(result)
 
         return result
@@ -848,13 +873,16 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         Returns:
             Tuple of (instance, created) where created is True if instance was created
         """
-        # Try to get existing instance
-        existing = self.get(session=session, **kwargs)
+        from sqlalchemy_query_manager.core.exceptions import DoesNotExist
 
-        if existing:
+        # Try to get existing instance
+        try:
+            existing = self.get(session=session, **kwargs)
             if expunge:
                 session.expunge(existing)
             return existing, False
+        except DoesNotExist:
+            pass
 
         # Create new instance with defaults
         create_kwargs = kwargs.copy()
@@ -965,8 +993,13 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         Returns:
             Tuple of (instance, created) where created is True if instance was created
         """
+        from sqlalchemy_query_manager.core.exceptions import DoesNotExist
+
         # Try to get existing instance
-        existing = self.get(session=session, **kwargs)
+        try:
+            existing = self.get(session=session, **kwargs)
+        except DoesNotExist:
+            existing = None
 
         if existing:
             # Update existing instance
@@ -1141,18 +1174,28 @@ class AsyncQueryManager(QueryManager):
 
     @get_async_session
     async def get(self, session=None, **kwargs):
-        binary_expressions = self.get_binary_expressions(filters=kwargs)
-
-        result = (
-            (
-                await session.execute(
-                    select(self.ConverterConfig.model).where(*binary_expressions)
-                )
-            )
-            .scalars()
-            .first()
+        """Async version of get — raises DoesNotExist or MultipleObjectsReturned."""
+        from sqlalchemy_query_manager.core.exceptions import (
+            DoesNotExist,
+            MultipleObjectsReturned,
         )
-        return result
+
+        if kwargs:
+            query_manager = self._clone()
+            query_manager._filters = {**self._filters, **kwargs}
+        else:
+            query_manager = self
+
+        results = (await session.execute(query_manager.query.limit(2))).scalars().all()
+
+        model_name = self.ConverterConfig.model.__name__
+
+        if not results:
+            raise DoesNotExist(f"{model_name} matching query does not exist.")
+        if len(results) > 1:
+            raise MultipleObjectsReturned(f"get() returned more than one {model_name}.")
+
+        return results[0]
 
     @get_async_session
     async def all(self, session=None):
@@ -1236,10 +1279,13 @@ class AsyncQueryManager(QueryManager):
     @get_async_session
     async def get_or_create(self, session=None, defaults=None, **kwargs):
         """Async version of get_or_create method."""
-        existing = await self.get(session=session, **kwargs)
+        from sqlalchemy_query_manager.core.exceptions import DoesNotExist
 
-        if existing:
+        try:
+            existing = await self.get(session=session, **kwargs)
             return existing, False
+        except DoesNotExist:
+            pass
 
         create_kwargs = kwargs.copy()
         if defaults:
@@ -1314,7 +1360,12 @@ class AsyncQueryManager(QueryManager):
     @get_async_session
     async def update_or_create(self, session=None, defaults=None, **kwargs):
         """Async version of update_or_create method."""
-        existing = await self.get(session=session, **kwargs)
+        from sqlalchemy_query_manager.core.exceptions import DoesNotExist
+
+        try:
+            existing = await self.get(session=session, **kwargs)
+        except DoesNotExist:
+            existing = None
 
         if existing:
             if defaults:
