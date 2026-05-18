@@ -155,13 +155,59 @@ class AsyncQueryManager(QueryManager):
 
     @get_async_session
     async def update(self, session=None, expunge=True, **kwargs):
-        """Async version of update method that returns updated objects."""
+        """Async version of update method that returns updated objects.
+
+        Uses ``UPDATE ... RETURNING <primary_key>`` to get the primary keys of
+        affected rows directly from the UPDATE (this is correct even if the
+        UPDATE itself changes the primary key) and then fetches the fresh ORM
+        objects via a second SELECT by those PKs. This avoids re-using the
+        original WHERE clause, which would silently miss rows whenever the
+        UPDATE changes a column that the filter references, and also avoids
+        ``IndexError`` when no rows matched.
+        """
         if not self._filters and not self._q_filters:
             raise ValueError(
                 "Cannot update without filters. Use where() to specify criteria."
             )
 
-        # Build update query with current filters
+        model = self.ConverterConfig.model
+        pk_cols = inspect(model).primary_key
+        if len(pk_cols) != 1:
+            # Composite PK is uncommon; fall back to legacy path (still
+            # vulnerable to the filter-on-mutated-column issue, but we don't
+            # have a single-column key to RETURNING here).
+            return await self._update_legacy_path(
+                session=session, expunge=expunge, **kwargs
+            )
+        pk_col = pk_cols[0]
+
+        update_query = update(model)
+
+        if self.binary_expressions:
+            update_query = update_query.where(*self.binary_expressions)
+
+        update_query = update_query.values(**kwargs).returning(pk_col)
+
+        result = await session.execute(
+            update_query, execution_options={"synchronize_session": False}
+        )
+        returned_pks = [row[0] for row in result]
+
+        if isinstance(self.session, sessionmaker):
+            await session.commit()
+        else:
+            await session.flush()
+
+        if not returned_pks:
+            return []
+
+        select_stmt = select(model).where(pk_col.in_(returned_pks))
+        updated_objects = (await session.execute(select_stmt)).scalars().all()
+
+        return updated_objects if len(updated_objects) > 1 else updated_objects[0]
+
+    async def _update_legacy_path(self, session, expunge=True, **kwargs):
+        """Composite-PK fallback: original UPDATE + follow-up SELECT path."""
         update_query = update(self.ConverterConfig.model)
 
         if self.binary_expressions:
@@ -176,8 +222,9 @@ class AsyncQueryManager(QueryManager):
         else:
             await session.flush()
 
-        # Then fetch the updated objects
         updated_objects = await self.all(session=session)
+        if not updated_objects:
+            return []
         return updated_objects if len(updated_objects) > 1 else updated_objects[0]
 
     @get_async_session
