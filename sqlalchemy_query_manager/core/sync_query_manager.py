@@ -911,13 +911,22 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         """
         Update records matching the current filters and return updated objects.
 
+        Uses ``UPDATE ... RETURNING <primary_key>`` to get the primary keys of
+        affected rows directly from the UPDATE (this is correct even if the
+        UPDATE itself changes the primary key) and then fetches the fresh ORM
+        objects via a second SELECT by those PKs. This avoids re-using the
+        original WHERE clause, which would silently miss rows whenever the
+        UPDATE changes a column that the filter references, and also avoids
+        ``IndexError`` when no rows matched.
+
         Args:
             session: Database session
             expunge: Whether to expunge the objects from session after update
             **kwargs: Field values to update
 
         Returns:
-            List of updated model instances
+            ``[]`` when no rows were updated, a single model instance when
+            exactly one row was updated, otherwise a list of model instances.
 
         Raises:
             ValueError: If no filters are set (to prevent accidental full table updates)
@@ -927,7 +936,51 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
                 "Cannot update without filters. Use where() to specify criteria."
             )
 
-        # Build update query with current filters
+        model = self.ConverterConfig.model
+        pk_cols = inspect(model).primary_key
+        if len(pk_cols) != 1:
+            return self._update_legacy_path(session=session, expunge=expunge, **kwargs)
+        pk_col = pk_cols[0]
+
+        update_query = update(model)
+
+        if self.binary_expressions:
+            update_query = update_query.where(*self.binary_expressions)
+
+        update_query = update_query.values(**kwargs).returning(pk_col)
+
+        result = session.execute(
+            update_query, execution_options={"synchronize_session": False}
+        )
+        returned_pks = [row[0] for row in result]
+
+        # Flush so the UPDATE is visible to the follow-up SELECT under the
+        # same transaction. We commit (or not) only after the read below.
+        session.flush()
+
+        if not returned_pks:
+            if self._to_commit:
+                session.commit()
+            return []
+
+        select_stmt = select(model).where(pk_col.in_(returned_pks))
+        updated_objects = list(session.execute(select_stmt).scalars().all())
+
+        # Order matters: expunge while rows are still attached and loaded, so
+        # a later commit() (with the default expire_on_commit=True) cannot
+        # expire our already-detached objects and break attribute access.
+        if expunge:
+            session.expunge_all()
+
+        if self._to_commit:
+            session.commit()
+
+        if not updated_objects:
+            return []
+        return updated_objects if len(updated_objects) > 1 else updated_objects[0]
+
+    def _update_legacy_path(self, session, expunge=True, **kwargs):
+        """Composite-PK fallback: original UPDATE + follow-up SELECT path."""
         update_query = update(self.ConverterConfig.model)
 
         if self.binary_expressions:
@@ -936,17 +989,17 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         update_query = update_query.values(**kwargs)
 
         session.execute(update_query)
+        session.flush()
 
-        if self._to_commit:
-            session.commit()
-        else:
-            session.flush()
-
-        # Then fetch the updated objects
         updated_objects = self.all(session=session)
 
         if expunge:
             session.expunge_all()
+        if self._to_commit:
+            session.commit()
+
+        if not updated_objects:
+            return []
         return updated_objects if len(updated_objects) > 1 else updated_objects[0]
 
     @get_session

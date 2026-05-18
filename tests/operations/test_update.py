@@ -145,3 +145,129 @@ async def test_async_update__with_q_filter__ok(
         assert data["name"] == "new_name"
         assert data["number"] == 999
         assert data["is_valid"] is False
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for `update()` follow-up-SELECT bug.
+#
+# Previously `update()` ran the UPDATE, then issued a *second* SELECT with the
+# same WHERE clause to fetch the updated rows. When the WHERE clause referenced
+# a column that the UPDATE itself changed (or when UPDATE matched zero rows),
+# the second SELECT returned no rows and `updated_objects[0]` raised
+# IndexError. The fix is to use UPDATE ... RETURNING in a single statement.
+# ---------------------------------------------------------------------------
+
+
+def test_update__filter_targets_changed_column__returns_rows(
+    db_session,
+    sync_db_engine,
+    item_sql_query_manager,
+):
+    """WHERE references is_valid=True; UPDATE sets is_valid=False.
+    After UPDATE no row matches `is_valid=True` anymore - the follow-up
+    SELECT used to return [], crashing on updated_objects[0]. Now the rows
+    must be returned via RETURNING.
+    """
+    items = models_factory.ItemFactory.create_batch(size=3, is_valid=True)
+    item_ids = {it.id for it in items}
+
+    updated = item_sql_query_manager.query_manager.where(is_valid=True).update(
+        is_valid=False, name="rotated"
+    )
+
+    updated_list = updated if isinstance(updated, list) else [updated]
+    assert {obj.id for obj in updated_list} == item_ids
+    for obj in updated_list:
+        data = obj.as_dict()
+        assert data["is_valid"] is False
+        assert data["name"] == "rotated"
+
+
+@pytest.mark.asyncio
+async def test_async_update__filter_targets_changed_column__returns_rows(
+    db_session,
+    sync_db_engine,
+    async_item_sql_query_manager,
+):
+    items = models_factory.ItemFactory.create_batch(size=3, is_valid=True)
+    item_ids = {it.id for it in items}
+
+    updated = await async_item_sql_query_manager.query_manager.where(
+        is_valid=True
+    ).update(is_valid=False, name="rotated")
+
+    updated_list = updated if isinstance(updated, list) else [updated]
+    assert {obj.id for obj in updated_list} == item_ids
+    for obj in updated_list:
+        data = obj.as_dict()
+        assert data["is_valid"] is False
+        assert data["name"] == "rotated"
+
+
+def test_update__no_rows_matched__returns_empty_list(
+    db_session,
+    sync_db_engine,
+    item_sql_query_manager,
+):
+    """UPDATE where no row matches the filter. Previously crashed with
+    IndexError on `updated_objects[0]`. Must now return [] instead.
+    """
+    updated = item_sql_query_manager.query_manager.where(id=999_999).update(
+        name="never"
+    )
+    assert updated == []
+
+
+@pytest.mark.asyncio
+async def test_async_update__no_rows_matched__returns_empty_list(
+    db_session,
+    sync_db_engine,
+    async_item_sql_query_manager,
+):
+    updated = await async_item_sql_query_manager.query_manager.where(id=999_999).update(
+        name="never"
+    )
+    assert updated == []
+
+
+def test_update__changes_primary_key__returns_renamed(
+    db_session,
+    sync_db_engine,
+    item_sql_query_manager,
+):
+    """UPDATE that changes the primary key referenced in WHERE. Previously
+    the follow-up SELECT used the old id and returned []. Must now return
+    the row with the new id.
+    """
+    item = models_factory.ItemFactory.create()
+    old_id = item.id
+    new_id = old_id + 1_000_000
+
+    updated = item_sql_query_manager.query_manager.where(id=old_id).update(
+        id=new_id, name="renamed"
+    )
+
+    assert not isinstance(updated, list)
+    data = updated.as_dict()
+    assert data["id"] == new_id
+    assert data["name"] == "renamed"
+
+
+@pytest.mark.asyncio
+async def test_async_update__changes_primary_key__returns_renamed(
+    db_session,
+    sync_db_engine,
+    async_item_sql_query_manager,
+):
+    item = models_factory.ItemFactory.create()
+    old_id = item.id
+    new_id = old_id + 1_000_000
+
+    updated = await async_item_sql_query_manager.query_manager.where(id=old_id).update(
+        id=new_id, name="renamed"
+    )
+
+    assert not isinstance(updated, list)
+    data = updated.as_dict()
+    assert data["id"] == new_id
+    assert data["name"] == "renamed"
