@@ -45,6 +45,8 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         self._q_filters: typing.List[Q] = []
         self._select_related: typing.List[str] = []
         self._prefetch_related: typing.List[str] = []
+        self._for_update = None
+        self._session_is_explicit = False
 
     def _clone(self):
         """Create a copy of the current QueryManager"""
@@ -71,6 +73,8 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         new_manager._q_filters = self._q_filters.copy()
         new_manager._select_related = self._select_related.copy()
         new_manager._prefetch_related = self._prefetch_related.copy()
+        new_manager._for_update = self._for_update.copy() if self._for_update else None
+        new_manager._session_is_explicit = self._session_is_explicit
 
         return new_manager
 
@@ -321,6 +325,29 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         query_manager._distinct = True
         return query_manager
 
+    def select_for_update(
+        self,
+        nowait: bool = False,
+        skip_locked: bool = False,
+        no_key: bool = False,
+    ):
+        """
+        Lock selected rows until the end of the current transaction.
+
+        Requires an explicit Session when the query is executed, either via a
+        method's session= argument or with_session().
+        """
+        if nowait and skip_locked:
+            raise ValueError("nowait and skip_locked cannot both be True.")
+
+        query_manager = self._clone()
+        query_manager._for_update = {
+            "nowait": nowait,
+            "skip_locked": skip_locked,
+            "key_share": no_key,
+        }
+        return query_manager
+
     @property
     def binary_expressions(self):
         if not self._binary_expressions and (self._filters or self._q_filters):
@@ -423,6 +450,9 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         if eager_options:
             query = query.options(*eager_options)
+
+        if self._for_update is not None:
+            query = query.with_for_update(**self._for_update)
 
         return query
 
@@ -805,6 +835,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         query_manager = self._clone()
 
         query_manager.session = session
+        query_manager._session_is_explicit = True
         return query_manager
 
     @get_session
