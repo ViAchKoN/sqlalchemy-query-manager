@@ -87,6 +87,7 @@ results = (
 **Querying**
 - `get()`, `first()`, `last()`, `all()`, `count()`, `exists()`
 - `only()` — select specific columns
+- `select_for_update()` — row-level locking inside an explicit transaction
 - `order_by()` with `E(field, nulls_last)` / `E(field, nulls_first)`
 - `limit()`, `offset()`, `distinct()`
 - `aggregate()` — `Sum`, `Avg`, `Count`, `Min`, `Max`
@@ -380,6 +381,48 @@ items = await Item.query_manager.order_by(E("name", nulls_last)).all()
 items = await Item.query_manager.order_by("id").limit(10).offset(20).all()
 items = await Item.query_manager.distinct().all()
 items = await Item.query_manager.only("id", "name").all()
+```
+
+---
+
+#### Row Locking
+
+Use `select_for_update()` to add `SELECT ... FOR UPDATE` row locks. The query must be executed with an explicit SQLAlchemy session, so the lock is held until your transaction commits or rolls back.
+
+```python
+with Session() as session:
+    item = (
+        Item.query_manager
+        .where(id=1)
+        .select_for_update()
+        .get(session=session)
+    )
+    item.name = "locked update"
+    session.commit()
+```
+
+Optional lock modes:
+
+```python
+item = Item.query_manager.where(id=1).select_for_update(nowait=True).get(session=session)
+items = Item.query_manager.where(status="pending").select_for_update(skip_locked=True).all(session=session)
+item = Item.query_manager.where(id=1).select_for_update(no_key=True).get(session=session)
+```
+
+`nowait=True` and `skip_locked=True` cannot be used together. `no_key=True` maps to PostgreSQL's `FOR NO KEY UPDATE`.
+
+##### Async
+
+```python
+async with AsyncSessionMaker() as session:
+    item = await (
+        Item.query_manager
+        .where(id=1)
+        .select_for_update()
+        .get(session=session)
+    )
+    item.name = "locked update"
+    await session.commit()
 ```
 
 ---
