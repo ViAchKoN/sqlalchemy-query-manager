@@ -1,9 +1,11 @@
 [tool.poetry]
 name = "sqlalchemy-query-manager"
-version = "0.6.0"
+version = "0.6.1"
 description = "Django-style ORM interface for SQLAlchemy: Q filters, eager loading, bulk operations, and native async support."
 authors = ["ViAchKoN"]
 readme = "README.md"
+license = "MIT"
+repository = "https://github.com/ViAchKoN/sqlalchemy-orm-plus"
 
 
 [tool.poetry.dependencies]

@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/sqlalchemy-query-manager.svg)](https://pypi.org/project/sqlalchemy-query-manager/)
 [![Python versions](https://img.shields.io/pypi/pyversions/sqlalchemy-query-manager.svg)](https://pypi.org/project/sqlalchemy-query-manager/)
 [![Downloads](https://static.pepy.tech/badge/sqlalchemy-query-manager/month)](https://pepy.tech/project/sqlalchemy-query-manager)
-[![test](https://github.com/ViAchKoN/dataclass-sqlalchemy-mixins/workflows/Test/badge.svg?query=branch%3Amaster+event%3Apush)](https://github.com/ViAchKoN/dataclass-sqlalchemy-mixins/actions?query=branch%3Amaster+event%3Apush+workflow%3ATest++)
+[![Test](https://github.com/ViAchKoN/sqlalchemy-orm-plus/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/ViAchKoN/sqlalchemy-orm-plus/actions/workflows/test.yml)
 
 Django-style ORM interface for SQLAlchemy — `Q` filters, eager loading, async support, and zero session boilerplate.
 
@@ -49,7 +49,7 @@ with Session() as session:
 **After** — with `sqlalchemy-query-manager`:
 
 ```python
-from sqlalchemy_query_manager.core.helpers import Q
+from sqlalchemy_query_manager import Q
 
 results = (
     Item.query_manager
@@ -120,7 +120,7 @@ Define your models by inheriting `ModelQueryManagerMixin` (or `AsyncModelQueryMa
 ```python
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, create_engine
 from sqlalchemy.orm import DeclarativeBase, relationship, sessionmaker
-from sqlalchemy_query_manager.core.base import ModelQueryManagerMixin
+from sqlalchemy_query_manager import ModelQueryManagerMixin
 
 engine = create_engine(DB_URL)
 Session = sessionmaker(engine)
@@ -159,7 +159,7 @@ class Item(Base, ModelQueryManagerMixin):
 ```python
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy_query_manager.core.base import AsyncModelQueryManagerMixin
+from sqlalchemy_query_manager import AsyncModelQueryManagerMixin
 
 engine = create_async_engine(DB_URL)
 AsyncSessionMaker = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -303,7 +303,7 @@ item = qm.get(id=1)
 Filter records using Django-style `__` lookup operators. Multiple `where()` calls are combined with `AND`. Use `Q` objects for `OR` / `AND` combinations and complex nested conditions. Foreign key filters trigger automatic JOINs — no explicit join needed.
 
 ```python
-from sqlalchemy_query_manager.core.helpers import Q
+from sqlalchemy_query_manager import Q
 
 # Simple filters
 item = Item.query_manager.get(id=1)
@@ -354,7 +354,7 @@ Control the shape of your result set. Prefix a field name with `-` for descendin
 
 ```python
 from sqlalchemy.sql.expression import nulls_last, nulls_first
-from sqlalchemy_query_manager.core.helpers import E
+from sqlalchemy_query_manager import E
 
 # Ordering
 items = Item.query_manager.order_by("name").all()                      # ASC
@@ -581,7 +581,7 @@ exists = await Item.query_manager.exists(name="widget")
 Compute summary statistics over a queryset in a single database call. Accepts any combination of `Sum`, `Avg`, `Count`, `Min`, `Max` and returns a plain `dict`. Can be combined with `where()` to aggregate over a filtered subset.
 
 ```python
-from sqlalchemy_query_manager.core.helpers import Sum, Count, Avg, Min, Max
+from sqlalchemy_query_manager import Avg, Count, Max, Min, Sum
 
 stats = Item.query_manager.where(is_valid=True).aggregate(
     total=Sum("number"),
@@ -639,7 +639,7 @@ rows = await Item.query_manager.raw(
 Inspect the SQL string that would be generated for a given query, without executing it. Useful for debugging, logging, or verifying that filters and joins are constructed as expected.
 
 ```python
-from sqlalchemy_query_manager.core.helpers import Q
+from sqlalchemy_query_manager import Q
 
 sql = Item.query_manager.where(
     Q(is_valid=True) | Q(number__gt=100), group__is_active=True
@@ -655,6 +655,7 @@ print(sql)
 
 ### Links
 
-- [GitHub](https://github.com/ViAchKoN/sqlalchemy-query-manager)
+- [GitHub](https://github.com/ViAchKoN/sqlalchemy-orm-plus)
 - [PyPI](https://pypi.org/project/sqlalchemy-query-manager/)
 - [dataclass-sqlalchemy-mixins](https://github.com/ViAchKoN/dataclass-sqlalchemy-mixins)
+- [MIT License](LICENSE)
