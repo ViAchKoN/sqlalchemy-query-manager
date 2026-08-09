@@ -93,12 +93,12 @@ async def test_async_transaction__uses_one_session_across_models_and_commits(
     group_manager = AsyncQueryManager(Group)
     item_manager = AsyncQueryManager(Item)
 
-    async with transaction(async_db_sessionmaker) as control:
+    async with transaction(async_db_sessionmaker) as tx:
         owner = await owner_manager.create(first_name="John", last_name="Doe")
         group = await group_manager.create(name="team", owner_id=owner.id)
         await item_manager.create(name="item", group_id=group.id)
 
-        await control.flush()
+        await tx.flush()
 
         assert await owner_manager.count() == 1
         assert await group_manager.count() == 1
@@ -173,11 +173,11 @@ async def test_async_transaction__manual_commit_and_rollback_are_rejected(
     create_tables,
     async_db_sessionmaker,
 ):
-    async with transaction(async_db_sessionmaker) as control:
+    async with transaction(async_db_sessionmaker) as tx:
         with pytest.raises(RuntimeError, match="Manual commit"):
-            await control.commit()
+            await tx.commit()
         with pytest.raises(RuntimeError, match="Manual rollback"):
-            await control.rollback()
+            await tx.rollback()
 
 
 @pytest.mark.asyncio
@@ -185,11 +185,11 @@ async def test_async_transaction__handle_is_inactive_after_exit(
     create_tables,
     async_db_sessionmaker,
 ):
-    async with transaction(async_db_sessionmaker) as control:
+    async with transaction(async_db_sessionmaker) as tx:
         pass
 
     with pytest.raises(RuntimeError, match="no longer active"):
-        await control.flush()
+        await tx.flush()
 
 
 @pytest.mark.asyncio
@@ -198,11 +198,11 @@ async def test_async_nested_session_context__cannot_commit_transaction(
     async_db_sessionmaker,
 ):
     async with transaction(async_db_sessionmaker):
-        async with session_context() as work:
+        async with session_context() as session_ctx:
             with pytest.raises(RuntimeError, match="Manual commit"):
-                await work.commit()
+                await session_ctx.commit()
             with pytest.raises(RuntimeError, match="Manual rollback"):
-                await work.rollback()
+                await session_ctx.rollback()
 
 
 @pytest.mark.asyncio

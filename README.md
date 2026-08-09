@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/sqlalchemy-query-manager.svg)](https://pypi.org/project/sqlalchemy-query-manager/)
 [![Python versions](https://img.shields.io/pypi/pyversions/sqlalchemy-query-manager.svg)](https://pypi.org/project/sqlalchemy-query-manager/)
 [![Downloads](https://static.pepy.tech/badge/sqlalchemy-query-manager/month)](https://pepy.tech/project/sqlalchemy-query-manager)
-[![Test](https://github.com/ViAchKoN/sqlalchemy-orm-plus/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/ViAchKoN/sqlalchemy-orm-plus/actions/workflows/test.yml)
+[![Test](https://github.com/ViAchKoN/sqlalchemy-query-manager/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/ViAchKoN/sqlalchemy-query-manager/actions/workflows/test.yml)
 
 Django-style ORM interface for SQLAlchemy — `Q` filters, eager loading, async support, and zero session boilerplate.
 
@@ -328,9 +328,9 @@ The outer transaction commits on normal exit and rolls back on an exception. Man
 the atomic boundary. Explicit `flush()` remains available:
 
 ```python
-with transaction(Session) as control:
+with transaction(Session) as tx:
     item = Item.query_manager.create(name="Needs an id")
-    control.flush()
+    tx.flush()
     print(item.id)
 ```
 
@@ -362,18 +362,18 @@ for all models but leaves transaction boundaries under your control.
 ```python
 from sqlalchemy_query_manager import session_context
 
-with session_context(Session) as work:
+with session_context(Session) as session:
     owner = Owner.query_manager.create(
         first_name="John",
         last_name="Doe",
     )
     Group.query_manager.create(name="Committed", owner_id=owner.id)
 
-    work.flush()
-    work.commit()
+    session.flush()
+    session.commit()
 
     Item.query_manager.create(name="Discarded")
-    work.rollback()
+    session.rollback()
 ```
 
 After `commit()` or `rollback()`, the next database command starts a new transaction
@@ -390,17 +390,17 @@ The same API works with an async sessionmaker. Context and control methods becom
 awaitable, while all models still share one `AsyncSession`:
 
 ```python
-async with transaction(AsyncSessionMaker) as control:
+async with transaction(AsyncSessionMaker) as tx:
     owner = await Owner.query_manager.create(
         first_name="John",
         last_name="Doe",
     )
     await Group.query_manager.create(name="Backend", owner_id=owner.id)
-    await control.flush()
+    await tx.flush()
 
-async with session_context(AsyncSessionMaker) as work:
+async with session_context(AsyncSessionMaker) as session:
     await Item.query_manager.create(name="Committed manually")
-    await work.commit()
+    await session.commit()
 ```
 
 An `AsyncSession` cannot be shared by concurrent tasks. Do not run query-manager
@@ -771,7 +771,7 @@ print(sql)
 
 ### Links
 
-- [GitHub](https://github.com/ViAchKoN/sqlalchemy-orm-plus)
+- [GitHub](https://github.com/ViAchKoN/sqlalchemy-query-manager)
 - [PyPI](https://pypi.org/project/sqlalchemy-query-manager/)
 - [dataclass-sqlalchemy-mixins](https://github.com/ViAchKoN/dataclass-sqlalchemy-mixins)
 - [MIT License](LICENSE)

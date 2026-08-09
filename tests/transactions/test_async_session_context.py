@@ -16,13 +16,13 @@ async def test_async_session_context__supports_manual_commit_and_rollback(
     owner_manager = AsyncQueryManager(Owner)
     item_manager = AsyncQueryManager(Item)
 
-    async with session_context(async_db_sessionmaker) as work:
+    async with session_context(async_db_sessionmaker) as session_ctx:
         await owner_manager.create(first_name="John", last_name="Doe")
-        await work.flush()
-        await work.commit()
+        await session_ctx.flush()
+        await session_ctx.commit()
 
         await item_manager.create(name="rolled back")
-        await work.rollback()
+        await session_ctx.rollback()
 
     async with async_db_sessionmaker() as session:
         assert len((await session.execute(select(Owner))).scalars().all()) == 1
@@ -69,9 +69,9 @@ async def test_async_session_context__supports_context_manager_provider(
         async with async_db_sessionmaker() as session:
             yield session
 
-    async with session_context(session_provider) as work:
+    async with session_context(session_provider) as session_ctx:
         await AsyncQueryManager(Item).create(name="committed")
-        await work.commit()
+        await session_ctx.commit()
 
     async with async_db_sessionmaker() as session:
         result = await session.execute(select(Item))
@@ -107,14 +107,14 @@ async def test_async_session_context__transaction_does_not_commit_outer_transact
     create_tables,
     async_db_sessionmaker,
 ):
-    async with session_context(async_db_sessionmaker) as work:
+    async with session_context(async_db_sessionmaker) as session_ctx:
         await AsyncQueryManager(Owner).create(
             first_name="John",
             last_name="Doe",
         )
         async with transaction():
             await AsyncQueryManager(Group).create(name="savepoint")
-        await work.rollback()
+        await session_ctx.rollback()
 
     async with async_db_sessionmaker() as session:
         owners = (await session.execute(select(Owner))).scalars().all()
@@ -142,12 +142,12 @@ async def test_async_session_context__handle_is_inactive_after_exit(
     create_tables,
     async_db_sessionmaker,
 ):
-    async with session_context(async_db_sessionmaker) as work:
+    async with session_context(async_db_sessionmaker) as session_ctx:
         pass
 
     for method_name in ("flush", "commit", "rollback"):
         with pytest.raises(RuntimeError, match="no longer active"):
-            await getattr(work, method_name)()
+            await getattr(session_ctx, method_name)()
 
 
 @pytest.mark.asyncio
