@@ -99,6 +99,8 @@ results = (
 - Direct `session` — use your own session, commit manually
 - Context manager — full lifecycle control with auto rollback
 - `with_session()` — override session per query
+- `transaction()` — one transaction shared by commands across models
+- `session_context()` — one shared session with manual commit, rollback, and flush
 - Works with Flask, FastAPI, and any framework
 
 **Async**
@@ -295,6 +297,120 @@ item = qm.get(id=1)
 > ⚠️ With `sessionmaker` and context managers, objects are **expunged** after each operation.
 > Accessing lazy relationship attributes on detached objects raises `DetachedInstanceError`.
 > Use `select_related()` or `prefetch_related()` to load relationships upfront, or use a direct `session`.
+
+##### Multi-model transaction
+
+Use `transaction()` when commands for different models must succeed or fail
+together. Pass a `sessionmaker`; the context creates and closes the session itself.
+Every query manager inside the block automatically uses that session, so individual
+commands do not need a `session=` argument.
+
+```python
+from sqlalchemy_query_manager import transaction
+
+with transaction(Session):
+    owner = Owner.query_manager.create(
+        first_name="John",
+        last_name="Doe",
+    )
+    group = Group.query_manager.create(
+        name="Backend",
+        owner_id=owner.id,
+    )
+    Item.query_manager.create(
+        name="First task",
+        group_id=group.id,
+    )
+```
+
+The outer transaction commits on normal exit and rolls back on an exception. Manual
+`commit()` and `rollback()` are intentionally unavailable because they would break
+the atomic boundary. Explicit `flush()` remains available:
+
+```python
+with transaction(Session) as control:
+    item = Item.query_manager.create(name="Needs an id")
+    control.flush()
+    print(item.id)
+```
+
+Nested transaction blocks reuse the same session and create a database SAVEPOINT.
+The nested transaction does not need the session source again:
+
+```python
+with transaction(Session):
+    Owner.query_manager.create(first_name="John", last_name="Doe")
+
+    try:
+        with transaction():
+            Group.query_manager.create(name="Rolled back")
+            raise ValueError("cancel group")
+    except ValueError:
+        pass
+
+    Item.query_manager.create(name="Still committed")
+```
+
+When the nested block fails, only its SAVEPOINT is rolled back. If the exception
+leaves the outer block, the complete transaction is rolled back.
+
+##### Manual session context
+
+Use `session_context()` for commit-as-you-go workflows. It creates one ambient session
+for all models but leaves transaction boundaries under your control.
+
+```python
+from sqlalchemy_query_manager import session_context
+
+with session_context(Session) as work:
+    owner = Owner.query_manager.create(
+        first_name="John",
+        last_name="Doe",
+    )
+    Group.query_manager.create(name="Committed", owner_id=owner.id)
+
+    work.flush()
+    work.commit()
+
+    Item.query_manager.create(name="Discarded")
+    work.rollback()
+```
+
+After `commit()` or `rollback()`, the next database command starts a new transaction
+in the same session. For a session created by the context, any transaction still
+pending on exit is rolled back; the context never commits implicitly.
+
+Both APIs also accept an existing `Session` or a session context-manager factory.
+An existing session is borrowed and is never committed, rolled back, or closed by
+`session_context()` on exit; its lifecycle remains the caller's responsibility.
+
+##### Async contexts
+
+The same API works with an async sessionmaker. Context and control methods become
+awaitable, while all models still share one `AsyncSession`:
+
+```python
+async with transaction(AsyncSessionMaker) as control:
+    owner = await Owner.query_manager.create(
+        first_name="John",
+        last_name="Doe",
+    )
+    await Group.query_manager.create(name="Backend", owner_id=owner.id)
+    await control.flush()
+
+async with session_context(AsyncSessionMaker) as work:
+    await Item.query_manager.create(name="Committed manually")
+    await work.commit()
+```
+
+An `AsyncSession` cannot be shared by concurrent tasks. Do not run query-manager
+commands from one context through `asyncio.gather()` or child tasks. Open a separate
+context with its own sessionmaker inside each concurrent task instead.
+
+A synchronous `Session` likewise cannot be shared across threads. Each worker thread
+must open its own `transaction(SessionMaker)` or `session_context(SessionMaker)`.
+If a `ContextVar` is explicitly propagated to another thread, the package detects
+the ownership mismatch and raises instead of reusing the ambient session.
 
 ---
 

@@ -1,6 +1,7 @@
 """Public API for SQLAlchemy Query Manager."""
 
 from sqlalchemy_query_manager.core.async_query_manager import AsyncQueryManager
+from sqlalchemy_query_manager.core.contexts import session_context, transaction
 from sqlalchemy_query_manager.core.exceptions import (
     DoesNotExist,
     MultipleObjectsReturned,
@@ -28,5 +29,7 @@ __all__ = [
     "MultipleObjectsReturned",
     "Q",
     "QueryManager",
+    "session_context",
     "Sum",
+    "transaction",
 ]
