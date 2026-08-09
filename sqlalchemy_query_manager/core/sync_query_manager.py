@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import InstrumentedAttribute, Session, sessionmaker
 
+from sqlalchemy_query_manager.core.contexts import get_current_context
 from sqlalchemy_query_manager.core.helpers import AggregateFunc, E, Q, _format_sql_value
 from sqlalchemy_query_manager.core.types import JoinConfig, JoinType
 from sqlalchemy_query_manager.core.utils import get_session
@@ -22,10 +23,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         self.session: typing.Union[Session, AsyncSession, sessionmaker] = session
 
-        self._to_commit = False
-
-        if isinstance(self.session, sessionmaker):
-            self._to_commit = True
+        self._to_commit = isinstance(self.session, sessionmaker)
 
         self.fields = None
 
@@ -77,6 +75,9 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         new_manager._session_is_explicit = self._session_is_explicit
 
         return new_manager
+
+    def _should_commit(self):
+        return self._to_commit and get_current_context() is None
 
     def join_models(
         self,
@@ -858,7 +859,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         new_obj = self.ConverterConfig.model(**kwargs)
         session.add(new_obj)
 
-        if self._to_commit:
+        if self._should_commit():
             session.commit()
         else:
             session.flush()
@@ -889,7 +890,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         objects = [self.ConverterConfig.model(**item) for item in data]
         session.add_all(objects)
 
-        if self._to_commit:
+        if self._should_commit():
             session.commit()
         else:
             session.flush()
@@ -990,7 +991,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         session.flush()
 
         if not returned_pks:
-            if self._to_commit:
+            if self._should_commit():
                 session.commit()
             return []
 
@@ -1003,7 +1004,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
         if expunge:
             session.expunge_all()
 
-        if self._to_commit:
+        if self._should_commit():
             session.commit()
 
         if not updated_objects:
@@ -1026,7 +1027,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         if expunge:
             session.expunge_all()
-        if self._to_commit:
+        if self._should_commit():
             session.commit()
 
         if not updated_objects:
@@ -1070,7 +1071,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         result = session.execute(update_query)
 
-        if self._to_commit:
+        if self._should_commit():
             session.commit()
         else:
             session.flush()
@@ -1106,7 +1107,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
                     if hasattr(existing, key):
                         setattr(existing, key, value)
 
-            if self._to_commit:
+            if self._should_commit():
                 session.commit()
             else:
                 session.flush()
@@ -1205,7 +1206,7 @@ class QueryManager(SqlAlchemyFilterConverterMixin, SqlAlchemyOrderConverterMixin
 
         result = session.execute(delete_query)
 
-        if self._to_commit:
+        if self._should_commit():
             session.commit()
         else:
             session.flush()

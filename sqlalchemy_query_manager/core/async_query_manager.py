@@ -3,12 +3,15 @@ import typing
 from sqlalchemy import delete, func, inspect, select, text, update
 from sqlalchemy.orm import sessionmaker
 
+from sqlalchemy_query_manager.core.contexts import get_current_context
 from sqlalchemy_query_manager.core.helpers import AggregateFunc
 from sqlalchemy_query_manager.core.sync_query_manager import QueryManager
 from sqlalchemy_query_manager.core.utils import get_async_session
 
 
 class AsyncQueryManager(QueryManager):
+    def _should_commit(self):
+        return isinstance(self.session, sessionmaker) and get_current_context() is None
 
     @get_async_session
     async def first(self, session=None):
@@ -104,7 +107,7 @@ class AsyncQueryManager(QueryManager):
         new_obj = self.ConverterConfig.model(**kwargs)
         session.add(new_obj)
 
-        if isinstance(self.session, sessionmaker):
+        if self._should_commit():
             await session.commit()
         else:
             await session.flush()
@@ -125,7 +128,7 @@ class AsyncQueryManager(QueryManager):
         objects = [self.ConverterConfig.model(**item) for item in data]
         session.add_all(objects)
 
-        if isinstance(self.session, sessionmaker):
+        if self._should_commit():
             await session.commit()
         else:
             await session.flush()
@@ -193,7 +196,7 @@ class AsyncQueryManager(QueryManager):
         )
         returned_pks = [row[0] for row in result]
 
-        if isinstance(self.session, sessionmaker):
+        if self._should_commit():
             await session.commit()
         else:
             await session.flush()
@@ -217,7 +220,7 @@ class AsyncQueryManager(QueryManager):
 
         await session.execute(update_query)
 
-        if isinstance(self.session, sessionmaker):
+        if self._should_commit():
             await session.commit()
         else:
             await session.flush()
@@ -256,7 +259,7 @@ class AsyncQueryManager(QueryManager):
 
         result = await session.execute(update_query)
 
-        if isinstance(self.session, sessionmaker):
+        if self._should_commit():
             await session.commit()
         else:
             await session.flush()
@@ -279,7 +282,7 @@ class AsyncQueryManager(QueryManager):
                     if hasattr(existing, key):
                         setattr(existing, key, value)
 
-            if isinstance(self.session, sessionmaker):
+            if self._should_commit():
                 await session.commit()
             else:
                 await session.flush()
@@ -349,7 +352,7 @@ class AsyncQueryManager(QueryManager):
             delete_query, execution_options={"synchronize_session": False}
         )
 
-        if isinstance(self.session, sessionmaker):
+        if self._should_commit():
             await session.commit()
         else:
             await session.flush()
