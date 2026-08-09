@@ -86,12 +86,12 @@ def test_transaction__uses_one_session_across_models_and_commits(
     group_manager = QueryManager(Group)
     item_manager = QueryManager(Item)
 
-    with transaction(sync_db_sessionmaker) as control:
+    with transaction(sync_db_sessionmaker) as tx:
         owner = owner_manager.create(first_name="John", last_name="Doe")
         group = group_manager.create(name="team", owner_id=owner.id)
         item_manager.create(name="item", group_id=group.id)
 
-        control.flush()
+        tx.flush()
 
         assert owner_manager.count() == 1
         assert group_manager.count() == 1
@@ -156,22 +156,22 @@ def test_transaction__manual_commit_and_rollback_are_rejected(
     create_tables,
     sync_db_sessionmaker,
 ):
-    with transaction(sync_db_sessionmaker) as control:
+    with transaction(sync_db_sessionmaker) as tx:
         with pytest.raises(RuntimeError, match="Manual commit"):
-            control.commit()
+            tx.commit()
         with pytest.raises(RuntimeError, match="Manual rollback"):
-            control.rollback()
+            tx.rollback()
 
 
 def test_transaction__handle_is_inactive_after_exit(
     create_tables,
     sync_db_sessionmaker,
 ):
-    with transaction(sync_db_sessionmaker) as control:
+    with transaction(sync_db_sessionmaker) as tx:
         pass
 
     with pytest.raises(RuntimeError, match="no longer active"):
-        control.flush()
+        tx.flush()
 
 
 def test_transaction__context_is_reset_after_exit(
@@ -241,11 +241,11 @@ def test_nested_session_context__cannot_commit_transaction(
     sync_db_sessionmaker,
 ):
     with transaction(sync_db_sessionmaker):
-        with session_context() as work:
+        with session_context() as session_ctx:
             with pytest.raises(RuntimeError, match="Manual commit"):
-                work.commit()
+                session_ctx.commit()
             with pytest.raises(RuntimeError, match="Manual rollback"):
-                work.rollback()
+                session_ctx.rollback()
 
 
 def test_transaction__supports_borrowed_session_without_closing_it(
