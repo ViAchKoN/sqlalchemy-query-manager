@@ -16,14 +16,14 @@ def test_session_context__supports_manual_flush_commit_and_rollback(
     group_manager = QueryManager(Group)
     item_manager = QueryManager(Item)
 
-    with session_context(sync_db_sessionmaker) as work:
+    with session_context(sync_db_sessionmaker) as session_ctx:
         owner = owner_manager.create(first_name="John", last_name="Doe")
         group_manager.create(name="committed", owner_id=owner.id)
-        work.flush()
-        work.commit()
+        session_ctx.flush()
+        session_ctx.commit()
 
         item_manager.create(name="rolled back")
-        work.rollback()
+        session_ctx.rollback()
 
         assert owner_manager.count() == 1
         assert group_manager.count() == 1
@@ -73,9 +73,9 @@ def test_session_context__supports_context_manager_provider(
         with sync_db_sessionmaker() as session:
             yield session
 
-    with session_context(session_provider) as work:
+    with session_context(session_provider) as session_ctx:
         QueryManager(Item).create(name="committed")
-        work.commit()
+        session_ctx.commit()
 
     with sync_db_sessionmaker() as session:
         assert session.query(Item).one().name == "committed"
@@ -103,11 +103,11 @@ def test_session_context__transaction_does_not_commit_outer_transaction(
     create_tables,
     sync_db_sessionmaker,
 ):
-    with session_context(sync_db_sessionmaker) as work:
+    with session_context(sync_db_sessionmaker) as session_ctx:
         QueryManager(Owner).create(first_name="John", last_name="Doe")
         with transaction():
             QueryManager(Group).create(name="savepoint")
-        work.rollback()
+        session_ctx.rollback()
 
     with sync_db_sessionmaker() as session:
         assert session.query(Owner).count() == 0
@@ -131,12 +131,12 @@ def test_session_context__handle_is_inactive_after_exit(
     create_tables,
     sync_db_sessionmaker,
 ):
-    with session_context(sync_db_sessionmaker) as work:
+    with session_context(sync_db_sessionmaker) as session_ctx:
         pass
 
     for method_name in ("flush", "commit", "rollback"):
         with pytest.raises(RuntimeError, match="no longer active"):
-            getattr(work, method_name)()
+            getattr(session_ctx, method_name)()
 
 
 def test_session_context__outer_context_requires_source():
